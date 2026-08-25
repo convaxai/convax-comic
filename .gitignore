@@ -1,0 +1,10 @@
+.DS_Store
+.yarn/
+node_modules/
+**/node_modules/
+**/lib/
+**/dist/
+**/coverage/
+.local/
+*.log
+*.tsbuildinfo

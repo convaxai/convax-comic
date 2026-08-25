@@ -1,0 +1,80 @@
+# Default inherits the compatibility security posture and replaces only the
+# documented generic brand slots through @convax/ui.
+- id: webserver
+  name: '@deepseek-ai/dsh-host-webserver'
+  disabled: true
+  config:
+    host: 127.0.0.1
+    port: 0
+
+- id: web-runtime
+  name: '@deepseek-ai/dsh-web-app'
+  config:
+    openBrowser: false
+    printUrl: false
+    surfaceContext: true
+    trustedHosts: []
+
+- id: sandbox-policy
+  name: '@deepseek-ai/dsh-sandbox-policy'
+  config:
+    mode: workspace-write
+
+- id: approval
+  name: '@deepseek-ai/dsh-user-approval'
+  config:
+    policy: ask
+
+- id: permission
+  name: '@deepseek-ai/dsh-permission-presets'
+  config:
+    defaultPreset: workspace-write
+    presets:
+      read-only:
+        sandbox: read-only
+        approval: ask
+      workspace-write:
+        sandbox: workspace-write
+        approval: ask
+
+- id: agent-presets
+  name: '@deepseek-ai/dsh-agent-presets'
+  disabled: true
+
+- id: ui-brand-official
+  name: '@deepseek-ai/dsh-client-ui-brand-official'
+  disabled: true
+
+- insert:
+    - id: app-agent-presets
+      name: '@convax/agent-presets'
+      config:
+        default: standard
+
+    - id: app-auth-fence
+      name: '@convax/auth-fence'
+      inject: [webStartup]
+      config:
+        host: 127.0.0.1
+        port: 0
+
+    - id: app-command-guard
+      name: '@convax/command-guard'
+
+    - id: app-desktop-host
+      name: '@convax/desktop'
+      config:
+        profile: default
+
+    # Deliberately precedes its provider: Cordis inject, not row order, owns
+    # activation.
+    - id: app-test-consumer
+      name: '@convax/test-consumer'
+
+    - id: app-runtime
+      name: '@convax/runtime'
+      config:
+        profile: default
+
+    - id: app-ui
+      name: '@convax/ui'
