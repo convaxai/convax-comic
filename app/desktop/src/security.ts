@@ -83,8 +83,7 @@ export function requestMatchesLaunchOrigin(
   }
 }
 
-export type HeaderValue = string | string[]
-export type RequestHeaders = Record<string, HeaderValue>
+export type RequestHeaders = Record<string, string>
 
 export function withControlToken(
   headers: Readonly<RequestHeaders>,
@@ -94,7 +93,7 @@ export function withControlToken(
   for (const [name, value] of Object.entries(headers)) {
     if (name.toLowerCase() !== CONTROL_TOKEN_HEADER) next[name] = value
   }
-  next[CONTROL_TOKEN_HEADER] = [token]
+  next[CONTROL_TOKEN_HEADER] = token
   return next
 }
 
@@ -114,7 +113,7 @@ export function installControlTokenInjector(
         && requestMatchesLaunchOrigin(details.url, context.origin)
       ) {
         callback({
-          requestHeaders: withControlToken(details.requestHeaders, context.token) as typeof details.requestHeaders,
+          requestHeaders: withControlToken(details.requestHeaders, context.token),
         })
         return
       }

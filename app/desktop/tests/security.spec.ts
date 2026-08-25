@@ -46,12 +46,12 @@ describe('exact launch origin', () => {
   })
 
   it('replaces case-insensitive caller headers without mutating them', () => {
-    const original = { Accept: ['application/json'], 'X-Convax-Control-Token': ['stale'] }
+    const original = { Accept: 'application/json', 'X-Convax-Control-Token': 'stale' }
     const next = withControlToken(original, 'fresh')
     expect(next).toEqual({
-      Accept: ['application/json'],
-      'x-convax-control-token': ['fresh'],
+      Accept: 'application/json',
+      'x-convax-control-token': 'fresh',
     })
-    expect(original['X-Convax-Control-Token']).toEqual(['stale'])
+    expect(original['X-Convax-Control-Token']).toBe('stale')
   })
 })
