@@ -29,15 +29,17 @@ Electron Renderer（sandbox、无 Node）
 
 | 项目 | 固定值 |
 | --- | --- |
-| DSH submodule / npm 运行闭包 | `0.1.1-rc.2` / `b150a551…` |
+| DSH npm 运行闭包 / source commit | `0.1.1-rc.2` / `b150a551…` |
 | Electron | `43.4.0` |
 | 打包 Node | 独立 `24.9.0`，不使用 `ELECTRON_RUN_AS_NODE` |
 | 首发平台 | 未签名 macOS ARM64 目录产物 |
 | profile | `compatibility` / `default` |
 | 上游补丁 | 空 |
 
-`deepseek-harness/` 是源码审计与升级对照，不是交付时的运行路径。最终应用
-使用精确版本的 npm 依赖闭包，全部位于应用 `Resources` 内。
+产品仓库不包含上游源码。`upstream.json` 记录 npm 版本与 source commit
+映射；需要读源码或运行上游构建时，可在仓库同级放置可选的
+`../deepseek-harness` checkout。最终应用只使用精确版本的 npm 依赖闭包，
+全部位于应用 `Resources` 内。
 
 ## 仓库拓扑
 
@@ -52,8 +54,8 @@ app/
     test-consumer/  生命周期证明插件
     ui/             当前最小 Comic 品牌 slot
   profiles/         compatibility / default / 最终安全 overlay
-deepseek-harness/   固定上游 submodule
 patches/            上游补丁清单（默认空）
+upstream.json       npm 运行版本与外部源码 commit 映射
 .agents/            门禁与决策记录
 ```
 
@@ -115,7 +117,7 @@ C1 之前不预设具体模型供应商、图片生成服务、资产 schema 或
 - `yarn package:dir` 生成 `Convax Comic.app`，并在隔离 HOME/CWD、空 PATH、
   无全局 Node/pnpm/上游 checkout 的条件下验证 DSH、PTY、鉴权和数据边界。
 - `compatibility` 保持上游 Client 零覆盖；`default` 的组合差异全部可解释。
-- preload 暴露面、权限 profile、host/port、submodule pin 与补丁清单相对
+- preload 暴露面、权限 profile、host/port、source/npm pin 与补丁清单相对
   导入基座无变化。
 
 ## 门禁与决策记录
