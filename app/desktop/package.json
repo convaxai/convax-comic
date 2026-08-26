@@ -2,7 +2,7 @@
   "name": "@convax/desktop",
   "version": "0.1.0",
   "private": true,
-  "description": "Minimal authenticated Electron shell for Convax Next",
+  "description": "Minimal authenticated Electron shell for Convax Comic",
   "type": "module",
   "main": "lib/main.js",
   "bin": {
@@ -157,8 +157,8 @@
     "vitest": "4.1.8"
   },
   "build": {
-    "appId": "com.convax.desktop",
-    "productName": "Convax",
+    "appId": "com.convax.comic",
+    "productName": "Convax Comic",
     "electronVersion": "43.4.0",
     "asar": false,
     "npmRebuild": false,

@@ -9,7 +9,7 @@ describe('appRuntime', () => {
     const runtime = ctx.get('appRuntime') as Runtime.AppRuntime
 
     expect(runtime).toMatchObject({
-      applicationName: 'Convax',
+      applicationName: 'Convax Comic',
       applicationVersion: '0.1.0',
       mode: 'test',
     })

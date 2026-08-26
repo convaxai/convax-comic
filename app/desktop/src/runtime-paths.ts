@@ -56,7 +56,7 @@ export interface DesktopRuntimePaths {
 export function resolveDesktopRuntimePaths(): DesktopRuntimePaths {
   if (process.platform !== 'darwin' || process.arch !== 'arm64') {
     throw new Error(
-      `Convax M1 packages Node only for darwin-arm64; received ${process.platform}-${process.arch}`,
+      `Convax Comic packages Node only for darwin-arm64; received ${process.platform}-${process.arch}`,
     )
   }
   return Object.freeze({

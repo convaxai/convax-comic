@@ -94,13 +94,13 @@ describe('named profile materialization', () => {
   it('resolves canonical sources differently in development and packaged apps', () => {
     expect(resolveProfileSourceRoot({
       packaged: false,
-      resourcesPath: '/Applications/Convax.app/Contents/Resources',
+      resourcesPath: '/Applications/Convax Comic.app/Contents/Resources',
       desktopPackageRoot: '/repo/app/desktop',
     })).toBe('/repo/app/profiles')
     expect(resolveProfileSourceRoot({
       packaged: true,
-      resourcesPath: '/Applications/Convax.app/Contents/Resources',
+      resourcesPath: '/Applications/Convax Comic.app/Contents/Resources',
       desktopPackageRoot: '/ignored/app.asar',
-    })).toBe('/Applications/Convax.app/Contents/Resources/profiles')
+    })).toBe('/Applications/Convax Comic.app/Contents/Resources/profiles')
   })
 })

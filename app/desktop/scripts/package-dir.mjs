@@ -25,7 +25,7 @@ const packagedNode = join(
   packageRoot,
   'dist',
   'mac-arm64',
-  'Convax.app',
+  'Convax Comic.app',
   'Contents',
   'Resources',
   'app',
@@ -40,7 +40,7 @@ const resourcesRoot = join(
   packageRoot,
   'dist',
   'mac-arm64',
-  'Convax.app',
+  'Convax Comic.app',
   'Contents',
   'Resources',
 )

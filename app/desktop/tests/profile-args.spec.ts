@@ -11,13 +11,13 @@ describe('named DSH profile arguments', () => {
   it('places all launcher flags before the inner web boundary', () => {
     const args = buildDshArgs({
       profile: 'compatibility',
-      trustedSecurityPatch: '/Applications/Convax.app/Contents/Resources/profiles/security.patch.yml',
+      trustedSecurityPatch: '/Applications/Convax Comic.app/Contents/Resources/profiles/security.patch.yml',
     })
     expect(args).toEqual([
       '--profile',
       'compatibility',
       '--patch',
-      '/Applications/Convax.app/Contents/Resources/profiles/security.patch.yml',
+      '/Applications/Convax Comic.app/Contents/Resources/profiles/security.patch.yml',
       '--host',
       '127.0.0.1',
       '--port',

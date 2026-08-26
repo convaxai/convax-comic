@@ -14,9 +14,10 @@
 
 ## 里程碑清单
 
+- [x] Convax Comic 公共桌面基座导入与产品身份隔离（B0）
 - [x] 外层包管理器选型（Yarn vs Bun，M1 前）
 - [x] 独立打包 Node 的 ABI 理由（M1）
 - [x] npm 运行闭包与 M1 验收记录
-- [ ] 画布 Client 插件缝 spike 结论（M1.5）
-- [ ] 单进程崩溃域评估结论（M1.5）
-- [ ] legacy 四内核包复用决策（M2）
+- [ ] Comic MVP 工作流与数据模型（C1）
+- [ ] Comic 整窗 Client 插件缝 / 自有路由 spike（C1）
+- [ ] 单进程崩溃域评估结论（C1）

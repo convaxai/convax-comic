@@ -203,7 +203,7 @@ export async function decideCommand(
   if (typeof command !== 'string') return next()
   const found = detectDangerousCommand(command)
   if (found === undefined) return next()
-  return { kind: 'ask', reason: `Convax command guard: ${found.reason} (${found.code})` }
+  return { kind: 'ask', reason: `Convax Comic command guard: ${found.reason} (${found.code})` }
 }
 
 export function apply(ctx: Context): void {

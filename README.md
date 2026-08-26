@@ -1,8 +1,12 @@
-# Convax Next
+# Convax Comic
 
-M1 is a thin authenticated Electron product over the pinned DeepSeek Harness
-runtime. The desktop process supervises an independent Node `24.9.0` child;
-Cordis profiles own every product capability.
+Convax Comic is an AI comic desktop product built on a thin authenticated
+Electron foundation over the pinned DeepSeek Harness runtime. The desktop
+process supervises an independent Node `24.9.0` child; Cordis profiles own
+every product capability.
+
+The repository currently contains the shared desktop foundation. The Comic
+project model and editor are intentionally not implemented by the import.
 
 ## Develop
 
@@ -35,9 +39,10 @@ patch, checks the HTTP fence, kills the default child with `SIGKILL`, and
 verifies a fresh token plus preserved product-owned data after restart. It does
 not open a GUI.
 
-`package:dir` creates an unsigned macOS ARM64 app and then starts its packaged
-Node/DSH closure with an empty `PATH`, isolated home and working directories,
-and no dependency symlink escaping the app's `Resources` directory.
+`package:dir` creates an unsigned macOS ARM64 `Convax Comic.app` and then
+starts its packaged Node/DSH closure with an empty `PATH`, isolated home and
+working directories, and no dependency symlink escaping the app's `Resources`
+directory.
 
 The source-audit checkout is the immutable `deepseek-harness/` submodule. Run
 its own toolchain only through `yarn upstream:install` and
@@ -48,7 +53,8 @@ its own toolchain only through `yarn upstream:install` and
 - `compatibility`: upstream client roster, mandatory Host auth/command/desktop
   boundaries only.
 - `default`: compatibility plus `appRuntime`, lifecycle consumer, and the
-  documented brand-slot replacement.
+  minimal Convax Comic brand-slot replacement. Most screens are still the
+  upstream DSH Client until Comic UI plugins replace them.
 - Agent mode is limited to the read-only `standard` / `code` roster; unsafe or
   user-authored preset compositions cannot bypass the Host permission posture.
 - Product configuration is pure-data YAML in `app/profiles/`.

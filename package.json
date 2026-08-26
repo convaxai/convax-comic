@@ -1,8 +1,8 @@
 {
-  "name": "convax-next",
+  "name": "convax-comic",
   "version": "0.1.0",
   "private": true,
-  "description": "Convax Next desktop product over DeepSeek Harness and Cordis",
+  "description": "Convax Comic desktop product over DeepSeek Harness and Cordis",
   "license": "UNLICENSED",
   "packageManager": "yarn@4.18.0",
   "engines": {

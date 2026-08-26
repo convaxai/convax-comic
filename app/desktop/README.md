@@ -1,8 +1,11 @@
 # `@convax/desktop`
 
-Convax Next 的最薄 Electron 壳与 Cordis Host 插件。它只负责独立 Node 子进程、
+Convax Comic 的最薄 Electron 壳与 Cordis Host 插件。它只负责独立 Node 子进程、
 启动鉴权、窗口安全、崩溃恢复和最小原生操作，不承载产品文件 API、插件转发或
 Client UI 覆盖。
+
+bootstrap 在任何 session 或产品目录初始化前把应用名与 `userData` 根固定为
+`Convax Comic`，与其他 Convax 产品的数据目录隔离。
 
 ## 私有 Host 服务
 

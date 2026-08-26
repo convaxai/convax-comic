@@ -5,7 +5,7 @@ import { dirname, join } from 'node:path'
 
 const require = createRequire(import.meta.url)
 if (process.platform !== 'darwin' || process.arch !== 'arm64') {
-  throw new Error(`Convax M1 packages Node only for darwin-arm64; received ${process.platform}-${process.arch}`)
+  throw new Error(`Convax Comic packages Node only for darwin-arm64; received ${process.platform}-${process.arch}`)
 }
 const manifestPath = require.resolve('node-bin-darwin-arm64/package.json')
 const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))

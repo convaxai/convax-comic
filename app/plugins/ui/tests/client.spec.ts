@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { apply } from '../src/client/index.ts'
 
-describe('Convax client brand', () => {
+describe('Convax Comic client brand', () => {
   it('occupies only the three documented generic brand slots', () => {
     const registrations: string[] = []
     const slots = {

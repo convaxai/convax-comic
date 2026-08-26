@@ -1,201 +1,133 @@
-# DSH Desktop + Cordis 新项目（v3）
+# Convax Comic 基座计划
 
 ## 总结
 
-在本仓 `convax-next` 分支重启，不迁移旧 Convax 代码（legacy 冻结规则见根
-[`AGENTS.md`](AGENTS.md)）。
+Convax Comic 是基于 DeepSeek Harness（DSH）与 Cordis 的 AI 漫画桌面
+产品。本次迁移只建立可运行、可打包、带认证边界的公共基座；漫画工作流、
+项目模型和编辑器需求尚未由产品规格定义，因此不在迁移中臆造实现。
 
-主参考改为社区桌面项目
-[`anywhere-labs/deepseek-harness-desktop`](https://github.com/anywhere-labs/deepseek-harness-desktop)：
-固定版本的上游 DeepSeek Harness 以 Git submodule 原样运行、永不修改；
-**桌面本身也是一个 DSH 插件**——窗口、托盘、更新、工作配置由桌面插件的
-Host/Client 双面提供，与第三方插件用同一套 Cordis 组合机制。
-[官方 examples](https://github.com/deepseek-ai/deepseek-harness/tree/master/examples)
-继续作为插件编写范式参考。
+基座继承 `convax/convax-next` 的可审计提交历史，并保持以下结构：
 
 ```text
-Electron bootstrap（app/desktop 拥有，尽量薄）
-  ├── 生成一次性鉴权 token
-  └── 启动 DSH 运行时（固定上游 submodule）
-        └── Cordis Context（同一棵树）
-              ├── 上游内置插件（原样）
-              ├── app/desktop Host 面（窗口/托盘/更新/工作配置服务）
-              ├── auth-fence（token 鉴权，P0）
-              ├── 产品插件（runtime / ui …）
-              └── 用户插件
+Electron bootstrap（app/desktop，尽量薄）
+  ├── 生成每次启动的一次性 token
+  └── 用独立 Node 24.9.0 启动固定 DSH 运行时
+        └── Cordis Context
+              ├── 上游插件（原样）
+              ├── desktop Host 插件
+              ├── auth-fence / command-guard
+              ├── 通用产品插件
+              └── 未来 Comic 领域插件
 
-Electron Renderer（sandbox，无 Node）
-  └── 加载 http://127.0.0.1:<random-port>（preload 注入 token）
-        ├── 兼容模式：上游默认 Web Client，零覆盖
-        └── 高级模式：桌面自有 Client 插件按 profile 替换文档化 slot
+Electron Renderer（sandbox、无 Node）
+  └── http://127.0.0.1:<random-port>
+        ├── compatibility：上游 Client 零覆盖
+        └── default：产品插件按 slot / route 渐进替换
 ```
 
-画布不进入骨架；未来作为桌面自有 Client 插件经 profile 组合加入，
-兼容模式永远保留为退路（见「风险验证」）。
+## 当前基线
 
-## 参考映射
-
-| 参考仓库要素 | 本项目采用 |
+| 项目 | 固定值 |
 | --- | --- |
-| `deepseek-harness/` 固定 submodule + 根 `upstream:*` 脚本 | 采用。上游永不在 feature 分支内修改；pin 更新与行为变更分开提交 |
-| `dsh-plugin-desktop/`（桌面即插件：Host/Client 双面 + Electron bootstrap + 打包） | 采用为 `app/desktop` 的形态基线 |
-| `patches/` 显式上游补丁清单 | 采用，默认为空；每次升级逐条验证可否删除 |
-| 兼容模式规则（上游默认 client 零覆盖必须可跑） | 采用为硬规则；高级呈现只经桌面自有 Client 插件 + profile 组合 |
-| 工作配置（profile 管理、packaged fallback） | 采用最小形状：`compatibility` 与 `default` 两个 profile 起步 |
-| `.agents/notes/` Agent Note 决策记录 + headless 检查门 | 采用（见「门禁与 Agent Notes」） |
-| `dsh-community-market` 开放 Schema 插件市场 | 不自建市场；M3 评估直接接入其数据源 Schema |
-| 手机远控、多语言 README、赞助体系 | 不采用 |
+| DSH submodule / npm 运行闭包 | `0.1.1-rc.2` / `b150a551…` |
+| Electron | `43.4.0` |
+| 打包 Node | 独立 `24.9.0`，不使用 `ELECTRON_RUN_AS_NODE` |
+| 首发平台 | 未签名 macOS ARM64 目录产物 |
+| profile | `compatibility` / `default` |
+| 上游补丁 | 空 |
 
-| 官方示例 | 参考用途 |
-| --- | --- |
-| `web-schedule` | overlay 插件 backend/client 双面 + `--patch` 挂载范式 |
-| `headless-agent` | 纯 `cordis.yml` 声明式组合范式 |
-| `jsonrpc-agent` | SDK/JSON-RPC 程序化驱动，自动化测试通道 |
-| `web-cordis` | 插件树自省，`dump-config` 实现参考 |
-| `mcp-memory` | 经官方 `dsh-mcp-client` 挂 MCP 服务器的配置范式 |
-| `acp-agent` | 备选控制面，暂不采用 |
+`deepseek-harness/` 是源码审计与升级对照，不是交付时的运行路径。最终应用
+使用精确版本的 npm 依赖闭包，全部位于应用 `Resources` 内。
 
-## 仓库拓扑（本分支）
+## 仓库拓扑
 
 ```text
 app/
-  desktop/          桌面插件：Electron bootstrap + Host 面 + Client 面 + 打包
+  desktop/          Electron bootstrap、监督器与私有 Host 服务
   plugins/
-    auth-fence/     token 鉴权 fence（P0）
-    runtime/        ctx.appRuntime：应用名称、版本、运行模式
-    ui/             最小品牌标记 Client 插件（证明装载成功）
-    test-consumer/  inject=['appRuntime'] 的测试消费插件
-  profiles/         compatibility / default 两个工作配置
-deepseek-harness/   固定上游 Git submodule（M1 引入）
-patches/            上游补丁清单（默认为空）
-.agents/
-  skills/gate-*/    门禁 skills
-  notes/            Agent Note 决策记录
-PLAN.md  AGENTS.md
-packages/ apps/ docs/ …  legacy 冻结区
+    agent-presets/  只读安全 Agent roster
+    auth-fence/     HTTP / WebSocket token 鉴权
+    command-guard/  高风险 shell 命令审批
+    runtime/        appRuntime 服务
+    test-consumer/  生命周期证明插件
+    ui/             当前最小 Comic 品牌 slot
+  profiles/         compatibility / default / 最终安全 overlay
+deepseek-harness/   固定上游 submodule
+patches/            上游补丁清单（默认空）
+.agents/            门禁与决策记录
 ```
 
-- 外层用一个包管理器（跟随参考仓库用 Yarn + `nodeLinker: node-modules`，
-  或统一 Bun，M1 前以打包验证结果定夺并记 Agent Note）；上游 submodule
-  保持自己的 pnpm workspace，只经根部 `upstream:*` 脚本进入。
-- 固定依赖：上游以 submodule commit pin；Electron `43.4.0`；打包 Node
-  `24.9.0`（独立打包而非 `ELECTRON_RUN_AS_NODE`，原因是上游原生模块
-  ABI 需求；禁止「顺手优化」掉，决策记 Agent Note）。
+## 基座边界
 
-## 实现方案
+### 桌面壳
 
-### 桌面插件（app/desktop）
+- Electron 只负责目录、随机 loopback 端口、token、子进程监督、窗口安全、
+  崩溃恢复和失败页。
+- Preload 仅暴露失败页操作和只读启动上下文；没有通用 IPC、文件或 shell
+  能力。
+- 子进程以进程组监督，父进程退出后必须回收整棵运行时进程树。
 
-- Electron bootstrap 尽量薄，且归桌面插件所有：
-  - 创建 `userData/launch-root` 与 `userData/harness`
-  - 生成本次启动的一次性鉴权 token
-  - 分配随机 `127.0.0.1` 端口并启动上游运行时（组合见下节）
-  - 健康检查、日志、崩溃重启、退出与子进程回收
-  - 重启后向 Renderer 广播新 origin 并触发自动重连导航
-  - 启动失败页
-- Host 面以 Cordis 服务暴露桌面能力（窗口、托盘、更新、工作配置读取/
-  切换）；哪些服务开放给第三方插件必须逐项文档化，默认不开放。
-- Renderer 开启 `sandbox`、`contextIsolation`，关闭 Node；导航仅允许
-  当次精确 loopback origin（重启后由 bootstrap 更新白名单）。
-- Preload 只暴露：失败页的重试/查看日志/退出 + 当前 origin 与 token 的
-  只读注入。
-- 预留「native affordance 窄 typed IPC 缝」（拖出 Finder、系统菜单、
-  剪贴板、deep link），当前空实现；禁止散点打洞。
+### 安全
 
-### 安全边界（P0，进 M1 验收）
+- 上游 Web 控制面无认证，`auth-fence` 必须在 HTTP 与 WebSocket 分发前
+  拒绝无效 token。
+- token 每次启动随机生成，只通过 preload / Electron 请求头注入；不得
+  落盘、进入日志或 URL。
+- Host 固定 `127.0.0.1` 随机端口；权限固定保守的
+  `workspace-write + ask`，用户 home patch 不能放宽最终安全 overlay。
+- Renderer 保持 `sandbox`、`contextIsolation`、无 Node，并只允许当前
+  精确 origin。
 
-- 上游 web 控制面无内建鉴权（上游讨论 #853/#2829；browser-trust fence
-  不是认证层），任何本机进程可驱动 agent 执行命令。因此：
-  - `auth-fence` 插件校验每个 HTTP/WebSocket 请求的 token header，无效
-    即 403；token 由 bootstrap 每次启动生成，只经 preload 注入。
-  - 验收：无 token 的本机请求被拒；持 token 请求正常。
-- Agent 权限姿势在产品 profile 中显式声明保守组合：工作区限定、危险
-  命令需审批；禁用或 fence 拦截 `commands/execute` 类静默提权入口。
+### 组合与 UI
 
-### Cordis 组合与工作配置
+- `compatibility` 始终保留上游 Client roster，作为升级和排障退路。
+- `default` 当前仍使用上游主要 UI，只替换最小品牌 slot。漫画产品 UI
+  必须作为 Client 插件加入；优先使用上游文档化 slot / route。
+- 若整窗漫画编辑器无法由现有 slot 承载，可在同一 Host 与鉴权层后提供
+  Comic 自有路由；不得把领域 UI 塞进 Electron bootstrap。
+- profile 是纯数据，patch 按 id 整行覆盖；新增普通插件只改依赖与 profile。
 
-- 组合即配置：产品插件经 profile 的 patch 挂载；不自建 Plugin Host、
-  Catalog、ActiveSet 或 broker。
-- 两个起步 profile：
-  - `compatibility`：上游默认 client，零覆盖，永远可跑——这是升级排障
-    与画布赌注的退路；
-  - `default`：兼容模式 + 产品插件（auth-fence 必挂，任何 profile 不得
-    移除）。
-- 配置是纯数据：无可执行表达式；平台/渠道条件用声明式字段；patch 按
-  id 整行覆盖 config。
-- 开发态支持热重载；生产态必需插件异常进入失败页，不静默跳过。
-- `dump-config` 输出最终插件树，作为组合真源（参考 `web-cordis`）。
+### 数据
 
-### 数据边界
-
-- 产品文档数据永不落上游拥有的目录（`userData/harness`、会话 JSONL）；
-  产品插件自管数据目录。上游升级可自由重建 harness 目录。
-
-### 文件与未来画布边界
-
-- 后端文件能力直接用上游 `ctx.fs`；不在 Electron 层新增文件 API。
-- 需要 UI 的插件自己提供 backend/client 双面（范式对齐 `web-schedule`），
-  不经过 Electron 转发。
-- 画布为独立 `@app/canvas` bundle：Node 入口注册 `ctx.canvas`，Client
-  入口按 profile 替换文档化 slot，Agent 操作注册 `ctx.tools`；加入画布
-  只改插件依赖与 profile，不改壳。是否复用 legacy 四内核包
-  （`@convax/collaboration`、`@convax/canvas` core、`@convax/bounded-value`、
-  `@convax/uri`）在 M2 决策并记 Agent Note。
-
-## 风险验证（M1 后立即执行）
-
-1. **画布级 UI 在 Client 插件缝内的 spike**：整窗编辑器、React Flow 量级
-   依赖、手势与渲染性能。退路已结构化：兼容模式永远可跑，画布模式只是
-   一个 profile；若 slot 承载不了，验证 harness 自控独立路由方案。
-2. **单进程崩溃域评估**：用户插件崩溃对 UI 与画布数据的影响；画布落地
-   时决定是否独立进程。
+- `userData/harness` 与 DSH 会话 JSONL 由上游拥有，可在升级时重建。
+- 漫画项目、角色、场景、分镜、媒体资产和导出物必须由未来领域插件放在
+  产品自有目录；具体 schema 与迁移策略在产品需求明确后另记 Agent Note。
+- 后端文件能力优先使用上游 `ctx.fs`，Electron 不新增产品文件 API。
 
 ## 路线图
 
 | 里程碑 | 内容 | 出口条件 |
 | --- | --- | --- |
-| M0（本次） | 契约、计划、门禁 skills、Agent Notes 约定 | 文档齐备，门禁可路由 |
-| M1 | 骨架：submodule 固定、桌面插件、auth-fence、两个 profile、dump-config | 「测试与验收」全绿 |
-| M1.5 | 两个风险 spike | 证据文档（Agent Note），非功能 |
-| M2 | `@app/canvas` 首版（单机、无协作）；内核包复用决策 | 画布可创建/编辑/持久化 |
-| M3 | 插件安装 UX：评估接入 dsh-community-market 开放 Schema 数据源 | 用户可装第三方插件 |
-| M4 | 打包签名/公证、自动更新、Windows x64 | 双平台可分发 |
+| B0（本次） | 导入公共基座；隔离 Convax Comic 名称、bundle id 与 userData | 全量门禁、真实运行与目录打包通过 |
+| C1 | 明确 Comic MVP 工作流、数据模型与整窗 UI 承载方案 | 产品规格与 UI spike 有可评审证据 |
+| C2 | 首个端到端漫画项目工作流 | 可创建、编辑、持久化并导出最小项目 |
+| C3 | 签名、公证、自动更新与 Windows x64 | 双平台可分发 |
 
-## 门禁与 Agent Notes
+C1 之前不预设具体模型供应商、图片生成服务、资产 schema 或协作协议。
 
-- 门禁路由表见 [`AGENTS.md`](AGENTS.md)；命中即读，多个命中全部执行。
-- 架构与流程决策写入 `.agents/notes/`（日期前缀 + 主题），实现后移入
-  `implemented/`；契约（AGENTS.md/PLAN.md）只保留规则，理由与取舍进
-  Note——对齐参考仓库的分工。
+## B0 测试与验收
 
-## 测试与验收
+- `corepack yarn install --immutable` 不修改 lockfile。
+- `yarn check` 通过构建、typecheck、生命周期、profile、布局和
+  `dump-config` 基线门禁。
+- `yarn smoke:upstream` 用两个 profile 启动真实 npm DSH，验证 hostile
+  home patch 无法关闭 fence、放宽权限或启用不安全 Agent preset。
+- `yarn package:dir` 生成 `Convax Comic.app`，并在隔离 HOME/CWD、空 PATH、
+  无全局 Node/pnpm/上游 checkout 的条件下验证 DSH、PTY、鉴权和数据边界。
+- `compatibility` 保持上游 Client 零覆盖；`default` 的组合差异全部可解释。
+- preload 暴露面、权限 profile、host/port、submodule pin 与补丁清单相对
+  导入基座无变化。
 
-- Cordis 生命周期：配置顺序无关启动；缺服务时 consumer `PENDING`；
-  provider 卸载回收 consumer 的事件/计时器/注册；恢复后重新激活。
-- 桌面壳：仅监听随机 loopback 端口；无 token 请求被拒（P0）；readiness
-  超时/崩溃/重启/退出/日志路径正确；kill -9 后自动重启且 Renderer 重连
-  新 origin、无产品数据丢失；外部 URL 交系统浏览器；Renderer 无 Node，
-  非当次 origin 导航被拒。
-- 组合：`dump-config` 包含 desktop Host 面、auth-fence、runtime、ui；
-  `compatibility` profile 零覆盖可跑；test-consumer 成功调用
-  `ctx.appRuntime`。
-- 集成：真实上游启动到 Web 可访问；打包产物在无全局 Node/pnpm/上游
-  checkout 的机器上可启动；升级回归入口自动化（真实启动 + dump-config
-  基线 diff + 生命周期 + fence 重验 + patches 逐条复核）。
-- 全部检查 headless-safe：构建、typecheck、测试、Loader smoke 不拉起
-  图形界面（对齐参考仓库）。
-- M1 验收：
-  - 一条命令进入开发工作流并打开 DSH UI
-  - 用户可添加目录并启动 Agent，权限为产品 profile 声明的保守组合
-  - Electron bootstrap 不含产品文件操作、画布逻辑或插件间转发
-    （native affordance 预留缝除外，当前为空）
-  - 新增一个普通插件只需安装依赖并修改 profile patch
+## 门禁与决策记录
+
+- 门禁路由见 [`AGENTS.md`](AGENTS.md)。
+- 架构理由、取舍与可证伪证据写入 `.agents/notes/`；历史基座 Notes 保留
+  原名，迁移后的新决策不得回写旧 Note。
 
 ## 假设与默认值
 
-- 首版仅骨架：不含画布、旧数据迁移、协作协议、自建市场、自更新、移动端。
-- Cordis 插件按可信本地代码处理，不承诺恶意插件隔离；控制面鉴权与保守
-  权限姿势不因此豁免——它们防的是插件体系之外的本机进程与模型行为。
-- 先 macOS ARM64，后 Windows x64；不同架构分别安装依赖与打包。
-- 上游以 submodule commit 精确固定；本地修补只存在于 `patches/` 显式
-  清单；升级必须走 gate-upstream 门禁全程。
+- 当前只是桌面基座，不代表 Comic 产品 UI 已完成；初次运行仍可能显示
+  上游 DSH 的通用设置与会话界面。
+- `@convax/*` 包命名空间、`CONVAX_*` 环境变量、IPC 与 token header 是
+  通用基座协议，本次不分叉；应用身份与用户数据由新 bundle id 隔离。
+- 插件按可信本地代码处理；控制面鉴权和保守 Agent 权限仍不可豁免。

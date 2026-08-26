@@ -8,10 +8,10 @@ interface SlotRegistry {
 
 type ClientContext = Context & { slots: SlotRegistry }
 
-function ConvaxMark(props: Record<string, unknown>): React.ReactElement {
+function ConvaxComicMark(props: Record<string, unknown>): React.ReactElement {
   const size = typeof props.size === 'number' ? props.size : 24
   return React.createElement('span', {
-    'aria-label': 'Convax',
+    'aria-label': 'Convax Comic',
     className: typeof props.className === 'string' ? props.className : undefined,
     style: {
       alignItems: 'center',
@@ -28,8 +28,8 @@ function ConvaxMark(props: Record<string, unknown>): React.ReactElement {
   }, 'C')
 }
 
-function ConvaxName(): React.ReactElement {
-  return React.createElement('span', { style: { fontWeight: 700, letterSpacing: '-0.02em' } }, 'Convax')
+function ConvaxComicName(): React.ReactElement {
+  return React.createElement('span', { style: { fontWeight: 700, letterSpacing: '-0.02em' } }, 'Convax Comic')
 }
 
 export const inject = ['slots']
@@ -38,8 +38,8 @@ export function apply(ctx: ClientContext): void {
   ctx.slots.inject('sidebar.brand.mark', () =>
     ctx.slots.inject('sidebar.brand.name', () =>
       ctx.slots.inject('conversation.hero.brand.mark', function* () {
-        yield ctx.slots.register({ name: 'sidebar.brand.mark' }, ConvaxMark)
-        yield ctx.slots.register({ name: 'sidebar.brand.name' }, ConvaxName)
-        yield ctx.slots.register({ name: 'conversation.hero.brand.mark' }, ConvaxMark)
+        yield ctx.slots.register({ name: 'sidebar.brand.mark' }, ConvaxComicMark)
+        yield ctx.slots.register({ name: 'sidebar.brand.name' }, ConvaxComicName)
+        yield ctx.slots.register({ name: 'conversation.hero.brand.mark' }, ConvaxComicMark)
       })))
 }

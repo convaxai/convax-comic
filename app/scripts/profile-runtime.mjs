@@ -147,7 +147,7 @@ export function dshBinPath() {
 
 export function packagedNodeBinPath() {
   if (process.platform !== 'darwin' || process.arch !== 'arm64') {
-    throw new Error(`Convax M1 packages Node only for darwin-arm64; received ${process.platform}-${process.arch}`)
+    throw new Error(`Convax Comic packages Node only for darwin-arm64; received ${process.platform}-${process.arch}`)
   }
   const require = createRequire(join(REPOSITORY_ROOT, 'app', 'desktop', 'package.json'))
   const manifestPath = require.resolve('node-bin-darwin-arm64/package.json')

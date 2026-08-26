@@ -4,9 +4,9 @@
   still replaces the unauthenticated Host web server, asks before high-confidence
   destructive shell commands, and mounts the private desktop Host service
   because those are mandatory product boundaries.
-- `default` adds `appRuntime`, its lifecycle consumer, and the Convax browser
-  brand plugin. It disables the one upstream row occupying those documented
-  brand slots.
+- `default` adds `appRuntime`, its lifecycle consumer, and the Convax Comic
+  browser brand plugin. It disables the one upstream row occupying those
+  documented brand slots.
 
 All patch files are pure data. Config fields replace complete upstream config
 rows; they are not deep merges. `security.patch.yml` is a shared, product-owned

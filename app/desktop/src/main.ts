@@ -36,6 +36,10 @@ import { DshSupervisor } from './supervisor.js'
 import { DESKTOP_IPC, type LaunchContext } from './types.js'
 import { desktopWindowOptions } from './window-options.js'
 
+const productName = 'Convax Comic'
+app.setName(productName)
+app.setPath('userData', join(app.getPath('appData'), productName))
+
 const preloadPath = fileURLToPath(new URL('./preload.cjs', import.meta.url))
 const desktopPackageRoot = dirname(dirname(fileURLToPath(import.meta.url)))
 const launchOptions = parseDesktopLaunchOptions(process.argv)

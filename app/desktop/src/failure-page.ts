@@ -14,7 +14,7 @@ export function failurePageUrl(message: string): string {
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
-  <title>Convax 启动中</title>
+  <title>Convax Comic 启动中</title>
   <style>
     :root { color-scheme: dark; font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, sans-serif; }
     body { min-height: 100vh; margin: 0; display: grid; place-items: center; background: #111318; color: #e8ebf2; }
@@ -28,7 +28,7 @@ export function failurePageUrl(message: string): string {
 </head>
 <body>
   <main>
-    <h1>Convax 暂时无法连接运行时</h1>
+    <h1>Convax Comic 暂时无法连接运行时</h1>
     <p>${escapeHtml(message)}</p>
     <nav>
       <button id="retry">重试</button>

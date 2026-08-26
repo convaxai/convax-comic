@@ -2,7 +2,7 @@ import type { BrowserWindowConstructorOptions } from 'electron'
 
 export function desktopWindowOptions(preload: string): BrowserWindowConstructorOptions {
   return {
-    title: 'Convax',
+    title: 'Convax Comic',
     width: 1280,
     height: 820,
     minWidth: 900,

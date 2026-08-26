@@ -8,7 +8,7 @@ export interface AppRuntimePing {
 
 /** Minimal product runtime seam. It intentionally exposes no file or shell API. */
 export interface AppRuntime {
-  readonly applicationName: 'Convax'
+  readonly applicationName: 'Convax Comic'
   readonly applicationVersion: '0.1.0'
   readonly mode: string
   readonly profile: string
@@ -31,7 +31,7 @@ export const name = 'app-runtime'
 export function apply(ctx: Context, config: Config = {}): void {
   const profile = config.profile ?? 'default'
   const service: AppRuntime = Object.freeze({
-    applicationName: 'Convax',
+    applicationName: 'Convax Comic',
     applicationVersion: '0.1.0',
     mode: profile,
     profile,
