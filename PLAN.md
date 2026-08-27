@@ -149,6 +149,9 @@ C2 之前不预设具体模型供应商、图片生成服务、持久资产 sche
   home patch 无法关闭 fence、放宽权限或启用不安全 Agent preset。
 - `yarn package:dir` 生成 `Convax Comic.app`，并在隔离 HOME/CWD、空 PATH、
   无全局 Node/pnpm/上游 checkout 的条件下验证 DSH、PTY、鉴权和数据边界。
+- GitHub CI 在 Node 24.9 跑完整 headless 门禁，在 Node 22.19/26 跑兼容构建、
+  类型与单测，并在 `macos-15` ARM64 runner 跑最终目录打包 smoke；稳定的
+  `all checks passed` 聚合任何 failure、cancelled 或 skipped 结果。
 - `compatibility` 保持上游 Client 零覆盖；`default` 的组合差异全部可解释。
 - Canvas 的文档/项目 schema、Host 多画布持久化/revision、Remote 同步、Agent 工具、外部
   拖拽解析、临时媒体释放与 root slot 卸载均有 headless 测试；React Flow
