@@ -96,12 +96,27 @@ function parseRows(output) {
   return { order, rows }
 }
 
+function assertOnlyDisabled(baseline, product, id) {
+  const baselineRow = YAML.parse(baseline.rows.get(id))?.[0]
+  const productRow = YAML.parse(product.rows.get(id))?.[0]
+  if (productRow?.disabled !== true) fail(`default ${id} is not disabled`)
+  delete productRow.disabled
+  delete baselineRow.disabled
+  if (JSON.stringify(productRow) !== JSON.stringify(baselineRow)) {
+    fail(`default ${id} changes more than its disabled state`)
+  }
+}
+
 function compareProfile(baselineOutput, productOutput, profile) {
   const baseline = parseRows(baselineOutput)
   const product = parseRows(productOutput)
   const expectedAdditions = expectedProfileAdditions(profile)
   const allowedChanges = new Set(PRODUCT_SHARED_CHANGES)
-  if (profile === 'default') allowedChanges.add('ui-brand-official')
+  if (profile === 'default') {
+    allowedChanges.add('ui-brand-official')
+    allowedChanges.add('ui-layout')
+    allowedChanges.add('ui-workspace')
+  }
 
   const missing = baseline.order.filter(id => !product.rows.has(id))
   if (missing.length !== 0) fail(`${profile} removed upstream rows: ${missing.join(', ')}`)
@@ -125,6 +140,9 @@ function compareProfile(baselineOutput, productOutput, profile) {
       if (baseline.rows.get(id) !== product.rows.get(id)) fail(`compatibility overrides client row ${id}`)
     }
   } else {
+    for (const id of ['ui-brand-official', 'ui-layout', 'ui-workspace']) {
+      assertOnlyDisabled(baseline, product, id)
+    }
     const consumer = product.order.indexOf('app-test-consumer')
     const provider = product.order.indexOf('app-runtime')
     if (consumer === -1 || provider === -1 || consumer >= provider) {

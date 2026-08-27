@@ -7,6 +7,10 @@ function fail(message) {
   throw new Error(`profile gate: ${message}`)
 }
 
+const CANONICAL_EXTERNAL_ROWS = new Map([
+  ['llm-openai-codex', 'dsh-codex-connect'],
+])
+
 function assertNoExecutableExpressions(value, label, path = '$') {
   if (value === null || typeof value !== 'object') return
   if (Object.hasOwn(value, '__jsExpr')) fail(`${label} contains an executable expression at ${path}`)
@@ -23,6 +27,7 @@ const desktopManifest = JSON.parse(readFileSync(
   join(REPOSITORY_ROOT, 'app', 'desktop', 'package.json'),
   'utf8',
 ))
+const yarnConfig = YAML.parse(readFileSync(join(REPOSITORY_ROOT, '.yarnrc.yml'), 'utf8'))
 const installedProfilePackages = new Set([
   '@convax/desktop',
   ...Object.keys(desktopManifest.dependencies ?? {}),
@@ -49,8 +54,9 @@ function inspect(name) {
 
   const inserted = patches.flatMap(patch => Array.isArray(patch?.insert) ? patch.insert : [])
   const ids = inserted.map(row => row?.id)
-  if (ids.some(id => typeof id !== 'string' || !id.startsWith('app-'))) {
-    fail(`${name} has a product row outside the app-* id namespace`)
+  if (inserted.some(row => typeof row?.id !== 'string'
+    || (!row.id.startsWith('app-') && CANONICAL_EXTERNAL_ROWS.get(row.id) !== row.name))) {
+    fail(`${name} has a product row outside app-* or an unrecognized canonical external row`)
   }
   if (new Set(ids).size !== ids.length) fail(`${name} has duplicate inserted ids`)
   for (const row of inserted) {
@@ -143,18 +149,49 @@ if (securityById.get('sandbox-policy')?.config?.mode !== 'workspace-write'
 if ([...compatibility.byId.keys()].some(id => id.startsWith('ui-'))) {
   fail('compatibility modifies an upstream UI row')
 }
-if ([...compatibility.insertedById.values()].some(row => row.name === '@convax/ui')) {
+const PRODUCT_CLIENT_PACKAGES = new Set(['@convax/ui', '@convax/canvas', 'dsh-codex-connect'])
+if ([...compatibility.insertedById.values()].some(row => PRODUCT_CLIENT_PACKAGES.has(row.name))) {
   fail('compatibility mounts a product Client UI')
 }
 if (defaultProfile.byId.get('ui-brand-official')?.disabled !== true) {
   fail('default does not release the official brand slots')
 }
+if (defaultProfile.byId.get('ui-layout')?.disabled !== true) {
+  fail('default does not release the root slot for the product workbench')
+}
+if (defaultProfile.byId.has('ui-sidebar')) {
+  fail('default overrides the official DSH sidebar shell')
+}
+if (defaultProfile.byId.get('ui-workspace')?.disabled !== true) {
+  fail('default does not release sidebar.workspaces for the product navigator')
+}
 for (const [id, packageName] of [
   ['app-runtime', '@convax/runtime'],
   ['app-test-consumer', '@convax/test-consumer'],
   ['app-ui', '@convax/ui'],
+  ['app-canvas', '@convax/canvas'],
 ]) {
   if (defaultProfile.insertedById.get(id)?.name !== packageName) fail(`default is missing ${id}`)
+}
+const codexConnect = defaultProfile.insertedById.get('llm-openai-codex')
+if (codexConnect?.name !== 'dsh-codex-connect'
+  || JSON.stringify(codexConnect.config) !== JSON.stringify({
+    enableProxy: false,
+    enableSearch: true,
+    enableImageTool: true,
+    enableImageGeneration: true,
+  })) {
+  fail('default does not mount Codex Connect with the approved optional capabilities')
+}
+if (desktopManifest.dependencies?.['dsh-codex-connect'] !== '0.1.0-alpha.4.20'
+  || desktopManifest.dependencies?.['@earendil-works/pi-ai'] !== '0.82.1'
+  || desktopManifest.dependencies?.['@deepseek-ai/dsh-llm-pi-ai'] !== '0.1.1-rc.2') {
+  fail('Codex Connect or its verified runtime peers are not exactly pinned')
+}
+if (JSON.stringify(yarnConfig.npmPreapprovedPackages)
+    !== JSON.stringify(['dsh-codex-connect@0.1.0-alpha.4.20'])
+  || yarnConfig.approvedGitRepositories !== undefined) {
+  fail('Codex Connect supply-chain exception is not limited to its exact npm descriptor')
 }
 
 for (const name of PROFILE_NAMES) {

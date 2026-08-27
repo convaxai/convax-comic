@@ -1,5 +1,6 @@
 # Default inherits the compatibility security posture and replaces only the
-# documented generic brand slots through @convax/ui.
+# documented generic brand slots through @convax/ui. Canvas owns the root slot
+# in this product profile and hosts the official conversation in its right pane.
 - id: webserver
   name: '@deepseek-ai/dsh-host-webserver'
   disabled: true
@@ -45,6 +46,14 @@
   name: '@deepseek-ai/dsh-client-ui-brand-official'
   disabled: true
 
+- id: ui-layout
+  name: '@deepseek-ai/dsh-client-ui-layout'
+  disabled: true
+
+- id: ui-workspace
+  name: '@deepseek-ai/dsh-client-ui-workspace'
+  disabled: true
+
 - insert:
     - id: app-agent-presets
       name: '@convax/agent-presets'
@@ -78,3 +87,16 @@
 
     - id: app-ui
       name: '@convax/ui'
+
+    - id: app-canvas
+      name: '@convax/canvas'
+
+    # Keep the third-party package's canonical row id so its diagnostics and
+    # keyed Plugin configuration surface identify the official provider.
+    - id: llm-openai-codex
+      name: dsh-codex-connect
+      config:
+        enableProxy: false
+        enableSearch: true
+        enableImageTool: true
+        enableImageGeneration: true

@@ -6,6 +6,7 @@ import { CONTROL_TOKEN_ENV, PROFILE_ENV } from './types.js'
 export interface DesktopPaths {
   readonly userData: string
   readonly harnessHome: string
+  readonly projectsHome: string
   readonly launchRoot: string
   readonly logs: string
 }
@@ -29,6 +30,7 @@ export function desktopPaths(userData: string): DesktopPaths {
   return Object.freeze({
     userData: absoluteUserData,
     harnessHome: join(absoluteUserData, 'harness'),
+    projectsHome: join(absoluteUserData, 'projects'),
     launchRoot: join(absoluteUserData, 'launch-root'),
     logs: join(absoluteUserData, 'logs'),
   })
@@ -37,6 +39,7 @@ export function desktopPaths(userData: string): DesktopPaths {
 export async function ensureDesktopPaths(paths: DesktopPaths): Promise<void> {
   await Promise.all([
     mkdir(paths.harnessHome, { recursive: true, mode: 0o700 }),
+    mkdir(paths.projectsHome, { recursive: true, mode: 0o700 }),
     mkdir(paths.launchRoot, { recursive: true, mode: 0o700 }),
     mkdir(paths.logs, { recursive: true, mode: 0o700 }),
   ])
@@ -100,5 +103,6 @@ export function childEnvironment(
     [CONTROL_TOKEN_ENV]: token,
     [PROFILE_ENV]: profile,
     DSH_HOME: paths.harnessHome,
+    CONVAX_PROJECTS_HOME: paths.projectsHome,
   }
 }

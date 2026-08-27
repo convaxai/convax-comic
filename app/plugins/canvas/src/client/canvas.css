@@ -1,0 +1,1042 @@
+.cvxWorkbench,
+.cvxCanvasOverlay,
+.cvxCanvasLauncher {
+  --cvx-canvas-ink: var(--dsw-alias-label-primary, #1b1d1a);
+  --cvx-canvas-secondary: var(--dsw-alias-label-secondary, #4d554f);
+  --cvx-canvas-muted: var(--dsw-alias-label-tertiary, #68716b);
+  --cvx-canvas-dimmed: var(--dsw-alias-label-dimmed, #858c87);
+  --cvx-canvas-base: var(--dsw-alias-bg-base, #f4f2ec);
+  --cvx-canvas-panel: var(--dsw-alias-bg-layer-1, #fbfaf7);
+  --cvx-canvas-raised: var(--dsw-alias-bg-layer-2, #fff);
+  --cvx-canvas-inset: var(--dsw-alias-bg-layer-3, #e8e5de);
+  --cvx-canvas-line: var(--dsw-alias-border-l1, #dedbd4);
+  --cvx-canvas-line-strong: var(--dsw-alias-border-l2, #cbc8c1);
+  --cvx-canvas-accent: #5c7a00;
+  --cvx-canvas-on-accent: #fff;
+  --cvx-canvas-accent-soft: color-mix(in oklab, var(--cvx-canvas-accent) 14%, var(--cvx-canvas-raised));
+  --cvx-canvas-accent-border: color-mix(in oklab, var(--cvx-canvas-accent) 56%, var(--cvx-canvas-line-strong));
+  --cvx-canvas-hover: color-mix(in oklab, var(--cvx-canvas-accent) 8%, var(--cvx-canvas-raised));
+  --cvx-canvas-danger: var(--dsw-alias-state-error-primary, #b52f43);
+  --cvx-canvas-danger-soft: var(--dsw-alias-state-error-secondary, #f9e4e7);
+  --cvx-canvas-radius-sm: 6px;
+  --cvx-canvas-radius-md: 8px;
+  --cvx-canvas-radius-lg: 12px;
+  --cvx-canvas-shadow-low: 0 1px 0 rgb(0 0 0 / 8%), 0 6px 18px rgb(0 0 0 / 10%);
+  --cvx-canvas-shadow-medium: 0 12px 36px rgb(0 0 0 / 26%);
+  --cvx-canvas-motion-fast: var(--ds-transition-duration-fast, 100ms);
+  --cvx-canvas-motion-normal: var(--ds-transition-duration-normal, 160ms);
+  --cvx-canvas-motion-slow: var(--ds-transition-duration-slow, 250ms);
+  --cvx-canvas-ease: var(--ds-ease-in-out, cubic-bezier(.25, .46, .45, .94));
+}
+
+body[data-ds-dark-theme] .cvxWorkbench,
+body[data-ds-dark-theme] .cvxCanvasOverlay,
+body[data-ds-dark-theme] .cvxCanvasLauncher {
+  --cvx-canvas-accent: #c6f22d;
+  --cvx-canvas-on-accent: #111217;
+}
+
+.cvxWorkbench {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  display: grid;
+  grid-template-rows: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  color: var(--cvx-canvas-ink);
+  background: var(--cvx-canvas-base);
+  font-family: var(--dsw-font-family, Inter, ui-sans-serif, system-ui, -apple-system, sans-serif);
+  transition: grid-template-columns var(--cvx-canvas-motion-slow) var(--cvx-canvas-ease);
+}
+
+.cvxWorkbench[data-resizing] {
+  cursor: col-resize;
+  user-select: none;
+  transition: none;
+}
+
+.cvxWorkbenchSidebar,
+.cvxWorkbenchAgentSeat {
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.cvxWorkbenchSidebar {
+  border-right: 1px solid var(--cvx-canvas-line);
+  background: var(--dsw-specific-sidebar-fill, var(--cvx-canvas-panel));
+}
+
+.cvxWorkbenchSidebar > *,
+.cvxWorkbenchAgentSeat > * {
+  height: 100%;
+}
+
+.cvxWorkbenchAgentSeat {
+  border-left: 1px solid var(--cvx-canvas-line-strong);
+  background: var(--cvx-canvas-panel);
+}
+
+.cvxWorkbench[data-agent-collapsed] .cvxWorkbenchAgentSeat {
+  border-left: 0;
+}
+
+.cvxWorkbenchCanvas {
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.cvxWorkbenchResizeHandle {
+  position: absolute;
+  z-index: 40;
+  top: 0;
+  bottom: 0;
+  width: 8px;
+  margin-left: -4px;
+  cursor: col-resize;
+  touch-action: none;
+  outline: none;
+}
+
+.cvxWorkbenchResizeHandle:focus-visible {
+  background: color-mix(in oklab, var(--cvx-canvas-accent) 18%, transparent);
+}
+
+.cvxWorkbenchResizeHandle[data-side="agent"]::after {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 12px;
+  height: 32px;
+  box-sizing: border-box;
+  border: 1px solid var(--cvx-canvas-line-strong);
+  border-radius: 10px;
+  opacity: 0;
+  background: var(--dsw-alias-button-floating-fill, var(--cvx-canvas-raised));
+  content: "";
+  transform: translate(-50%, -50%);
+  transition: opacity var(--cvx-canvas-motion-normal) var(--cvx-canvas-ease);
+}
+
+.cvxWorkbenchAgentSeat:hover ~ .cvxWorkbenchResizeHandle[data-side="agent"]::after,
+.cvxWorkbenchResizeHandle[data-side="agent"]:hover::after,
+.cvxWorkbenchResizeHandle[data-side="agent"]:focus-visible::after {
+  opacity: 1;
+}
+
+.cvxTreeScroll {
+  min-height: 0;
+  height: 100%;
+  overflow: auto;
+  padding: 8px 8px 20px;
+  box-sizing: border-box;
+}
+
+.cvxTreeSection {
+  margin-bottom: 16px;
+}
+
+.cvxTreeSection > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 30px;
+  padding: 0 8px;
+  color: var(--cvx-canvas-muted);
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.cvxTreeSection > header small {
+  font-size: 9px;
+  font-weight: 600;
+}
+
+.cvxTreeHeaderActions {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.cvxTreeAdd {
+  appearance: none;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  color: var(--cvx-canvas-secondary);
+  background: transparent;
+  cursor: pointer;
+}
+
+.cvxTreeAdd:hover {
+  border-color: var(--cvx-canvas-line);
+  color: var(--cvx-canvas-ink);
+  background: var(--cvx-canvas-hover);
+}
+
+.cvxTreeBranch,
+.cvxTreeItem {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  min-width: 0;
+  height: 30px;
+  box-sizing: border-box;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--cvx-canvas-radius-sm);
+  color: var(--cvx-canvas-secondary);
+  background: transparent;
+  font: inherit;
+  font-size: 11px;
+  text-align: left;
+}
+
+.cvxTreeItem {
+  cursor: pointer;
+}
+
+.cvxTreeItem:hover,
+.cvxTreeItemActive {
+  color: var(--cvx-canvas-ink);
+  background: var(--cvx-canvas-accent-soft);
+}
+
+.cvxTreeItem svg {
+  flex: none;
+  color: var(--cvx-canvas-accent);
+}
+
+.cvxTreeItem span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cvxTreeItem small {
+  margin-left: auto;
+  color: var(--cvx-canvas-muted);
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+}
+
+.cvxTreeChevron {
+  width: 12px;
+  color: var(--cvx-canvas-dimmed);
+  text-align: center;
+}
+
+.cvxTreeEmpty {
+  margin: 5px 8px 4px 27px;
+  color: var(--cvx-canvas-muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.cvxTreeError {
+  margin: 6px 8px;
+  color: var(--cvx-canvas-danger);
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.cvxTreeNodes {
+  margin-left: 15px;
+  padding-left: 5px;
+  border-left: 1px solid var(--cvx-canvas-line);
+}
+
+.cvxProjectRail {
+  display: grid;
+  justify-items: center;
+  padding-top: 6px;
+}
+
+.cvxProjectRail button {
+  appearance: none;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid transparent;
+  border-radius: var(--cvx-canvas-radius-md);
+  color: var(--cvx-canvas-secondary);
+  background: transparent;
+  cursor: pointer;
+}
+
+.cvxProjectRail button:hover {
+  color: var(--cvx-canvas-ink);
+  background: var(--cvx-canvas-hover);
+}
+
+.cvxWorkbenchAgent {
+  display: grid;
+  grid-template-rows: 48px minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
+  background: var(--cvx-canvas-panel);
+}
+
+.cvxWorkbenchAgent > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--cvx-canvas-line);
+  color: var(--cvx-canvas-ink);
+  font-size: 13px;
+  font-weight: 650;
+  -webkit-app-region: drag;
+  user-select: none;
+}
+
+.cvxWorkbenchAgent > header > div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cvxWorkbenchAgentActions {
+  justify-content: flex-end;
+}
+
+.cvxAgentNewSession {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 9px;
+  border: 1px solid var(--cvx-canvas-accent-border);
+  border-radius: var(--cvx-canvas-radius-sm);
+  color: var(--cvx-canvas-ink);
+  background: var(--cvx-canvas-accent-soft);
+  font: inherit;
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color var(--cvx-canvas-motion-fast) var(--cvx-canvas-ease);
+  -webkit-app-region: no-drag;
+}
+
+.cvxAgentNewSession:hover {
+  background: var(--cvx-canvas-hover);
+}
+
+.cvxAgentPulse {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--cvx-canvas-accent);
+  box-shadow: 0 0 0 4px color-mix(in oklab, var(--cvx-canvas-accent) 16%, transparent);
+}
+
+.cvxWorkbenchAgentBody {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 0;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  transition: grid-template-columns var(--cvx-canvas-motion-normal) var(--cvx-canvas-ease);
+}
+
+.cvxWorkbenchAgentBody[data-details-open] {
+  grid-template-columns: 0 minmax(0, 1fr);
+}
+
+.cvxWorkbenchConversation,
+.cvxWorkbenchDetails {
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.cvxWorkbenchConversation > *,
+.cvxWorkbenchDetails > * {
+  height: 100%;
+}
+
+.cvxWorkbenchOverlays {
+  position: fixed;
+  z-index: 1000;
+  inset: 0;
+  pointer-events: none;
+}
+
+.cvxWorkbenchOverlays > * {
+  pointer-events: auto;
+}
+
+.cvxCanvasLauncher {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.cvxCanvasLauncherButton {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-width: 36px;
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: var(--cvx-canvas-radius-md);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  transition:
+    background-color var(--cvx-canvas-motion-fast) var(--cvx-canvas-ease),
+    border-color var(--cvx-canvas-motion-fast) var(--cvx-canvas-ease),
+    color var(--cvx-canvas-motion-fast) var(--cvx-canvas-ease);
+}
+
+.cvxCanvasLauncherButton:hover {
+  border-color: var(--cvx-canvas-line);
+  background: var(--cvx-canvas-hover);
+}
+
+.cvxCanvasLauncherButton:focus-visible,
+.cvxCanvasButton:focus-visible,
+.cvxCanvasIconButton:focus-visible,
+.cvxZoomTrigger:focus-visible,
+.cvxTreeAdd:focus-visible {
+  outline: 2px solid var(--cvx-canvas-accent);
+  outline-offset: 2px;
+}
+
+.cvxCanvasLauncherButton svg {
+  flex: 0 0 auto;
+}
+
+.cvxCanvasLauncherLabel {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.cvxCanvasOverlay {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+  display: grid;
+  grid-template-rows: 56px minmax(0, 1fr);
+  overflow: hidden;
+  color: var(--cvx-canvas-ink);
+  background: var(--cvx-canvas-base);
+  font-family: var(--dsw-font-family, Inter, ui-sans-serif, system-ui, -apple-system, sans-serif);
+  isolation: isolate;
+}
+
+.cvxCanvasTopbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-width: 0;
+  padding: 0 14px 0 18px;
+  border-bottom: 1px solid var(--cvx-canvas-line);
+  background: color-mix(in srgb, var(--cvx-canvas-panel) 92%, transparent);
+  backdrop-filter: blur(16px);
+  -webkit-app-region: drag;
+  user-select: none;
+}
+
+.cvxCanvasBrand,
+.cvxCanvasTools,
+.cvxCanvasSelectionActions {
+  display: flex;
+  align-items: center;
+}
+
+.cvxCanvasBrand {
+  gap: 10px;
+  min-width: 0;
+}
+
+.cvxCanvasBrandMark {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  border-radius: var(--cvx-canvas-radius-md);
+  color: var(--cvx-canvas-on-accent);
+  background: var(--cvx-canvas-accent);
+  box-shadow: var(--cvx-canvas-shadow-low);
+}
+
+.cvxCanvasBrandCopy {
+  min-width: 0;
+  line-height: 1.15;
+}
+
+.cvxCanvasBrandCopy strong,
+.cvxCanvasBrandCopy span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cvxCanvasBrandCopy strong {
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.cvxCanvasBrandCopy span {
+  margin-top: 3px;
+  color: var(--cvx-canvas-muted);
+  font-size: 10px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.cvxCanvasBody {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.cvxCanvasStage {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 50% -24%, color-mix(in oklab, var(--cvx-canvas-accent) 8%, transparent), transparent 38%),
+    var(--cvx-canvas-base);
+}
+
+.cvxCanvasFlow {
+  width: 100%;
+  height: 100%;
+}
+
+.cvxCanvasFlow .react-flow__pane {
+  cursor: default;
+}
+
+.cvxCanvasStageHand .cvxCanvasFlow .react-flow__pane {
+  cursor: grab;
+}
+
+.cvxCanvasStageHand .cvxCanvasFlow .react-flow__pane.dragging {
+  cursor: grabbing;
+}
+
+.cvxCanvasFlow .react-flow__edge-path {
+  stroke: var(--cvx-canvas-line-strong);
+  stroke-width: 1.5;
+}
+
+.cvxCanvasFlow .react-flow__edge.selected .react-flow__edge-path {
+  stroke: var(--cvx-canvas-accent);
+  stroke-width: 2;
+}
+
+.cvxCanvasFlow .react-flow__selection,
+.cvxCanvasFlow .react-flow__nodesselection-rect {
+  border: 1px solid var(--cvx-canvas-accent);
+  background: color-mix(in oklab, var(--cvx-canvas-accent) 9%, transparent);
+}
+
+.cvxCanvasFlow .react-flow__minimap {
+  overflow: hidden;
+  border: 1px solid var(--cvx-canvas-line);
+  border-radius: var(--cvx-canvas-radius-md);
+  background: color-mix(in srgb, var(--cvx-canvas-raised) 94%, transparent);
+}
+
+.cvxCanvasToolbar {
+  position: absolute;
+  z-index: 5;
+  top: 14px;
+  left: 50%;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px;
+  border: 1px solid var(--cvx-canvas-line);
+  border-radius: var(--cvx-canvas-radius-lg);
+  background: color-mix(in srgb, var(--cvx-canvas-raised) 92%, transparent);
+  box-shadow: var(--cvx-canvas-shadow-medium);
+  backdrop-filter: blur(16px);
+  transform: translateX(-50%);
+}
+
+.cvxCanvasTools {
+  gap: 4px;
+}
+
+.cvxCanvasDivider {
+  width: 1px;
+  height: 23px;
+  margin: 0 3px;
+  background: var(--cvx-canvas-line);
+}
+
+.cvxCanvasButton,
+.cvxCanvasIconButton {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  height: 32px;
+  border: 1px solid transparent;
+  border-radius: var(--cvx-canvas-radius-md);
+  color: var(--cvx-canvas-ink);
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 560;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color var(--cvx-canvas-motion-fast) var(--cvx-canvas-ease),
+    border-color var(--cvx-canvas-motion-fast) var(--cvx-canvas-ease),
+    color var(--cvx-canvas-motion-fast) var(--cvx-canvas-ease),
+    transform var(--cvx-canvas-motion-fast) var(--cvx-canvas-ease);
+  -webkit-app-region: no-drag;
+}
+
+.cvxCanvasButton {
+  padding: 0 10px;
+}
+
+.cvxCanvasIconButton {
+  width: 32px;
+  padding: 0;
+}
+
+.cvxCanvasButton:hover:not(:disabled),
+.cvxCanvasIconButton:hover:not(:disabled) {
+  border-color: var(--cvx-canvas-line);
+  background: var(--cvx-canvas-hover);
+}
+
+.cvxCanvasButton:active:not(:disabled),
+.cvxCanvasIconButton:active:not(:disabled) {
+  transform: scale(.97);
+}
+
+.cvxCanvasButton[data-active="true"],
+.cvxCanvasIconButton[data-active="true"] {
+  border-color: var(--cvx-canvas-accent-border);
+  color: var(--cvx-canvas-ink);
+  background: var(--cvx-canvas-accent-soft);
+}
+
+.cvxCanvasButton:disabled,
+.cvxCanvasIconButton:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+}
+
+.cvxCanvasButtonDanger:hover:not(:disabled) {
+  border-color: color-mix(in oklab, var(--cvx-canvas-danger) 46%, var(--cvx-canvas-line));
+  color: var(--cvx-canvas-danger);
+  background: var(--cvx-canvas-danger-soft);
+}
+
+.cvxViewportToolbar {
+  position: absolute;
+  z-index: 6;
+  left: 14px;
+  bottom: 14px;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  min-height: 42px;
+  padding: 4px 5px;
+  border: 1px solid var(--cvx-canvas-line);
+  border-radius: var(--cvx-canvas-radius-lg);
+  background: color-mix(in srgb, var(--cvx-canvas-raised) 94%, transparent);
+  box-shadow: var(--cvx-canvas-shadow-low);
+  backdrop-filter: blur(14px);
+}
+
+.cvxViewportToolbar .cvxCanvasDivider {
+  height: 21px;
+  margin: 0 3px;
+}
+
+.cvxViewportToolbar .cvxCanvasIconButton[data-active="true"] {
+  border-color: var(--cvx-canvas-accent-border);
+  background: var(--cvx-canvas-accent-soft);
+}
+
+.cvxZoomControl {
+  position: relative;
+}
+
+.cvxLayoutControl {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.cvxLayoutControl > .cvxCanvasIconButton {
+  border-top-right-radius: 4px;
+  border-bottom-right-radius: 4px;
+}
+
+.cvxLayoutDirectionTrigger {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 32px;
+  margin-left: -1px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-top-right-radius: var(--cvx-canvas-radius-md);
+  border-bottom-right-radius: var(--cvx-canvas-radius-md);
+  color: var(--cvx-canvas-muted);
+  background: transparent;
+  cursor: pointer;
+}
+
+.cvxLayoutControl:hover > .cvxCanvasIconButton,
+.cvxLayoutDirectionTrigger:hover,
+.cvxLayoutDirectionTrigger[aria-expanded="true"] {
+  border-color: var(--cvx-canvas-line);
+  background: var(--cvx-canvas-hover);
+}
+
+.cvxZoomTrigger {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  width: 66px;
+  height: 32px;
+  padding: 0 5px;
+  border: 1px solid transparent;
+  border-radius: var(--cvx-canvas-radius-md);
+  color: var(--cvx-canvas-secondary);
+  background: transparent;
+  font: inherit;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.cvxZoomTrigger:hover {
+  border-color: var(--cvx-canvas-line);
+  background: var(--cvx-canvas-hover);
+}
+
+.cvxZoomTrigger span {
+  min-width: 37px;
+  text-align: center;
+}
+
+.cvxZoomMenu {
+  position: absolute;
+  z-index: 20;
+  bottom: calc(100% + 9px);
+  left: 50%;
+  width: 116px;
+  padding: 7px;
+  border: 1px solid var(--cvx-canvas-line);
+  border-radius: var(--cvx-canvas-radius-md);
+  background: color-mix(in srgb, var(--cvx-canvas-raised) 96%, transparent);
+  box-shadow: var(--cvx-canvas-shadow-medium);
+  backdrop-filter: blur(14px);
+  transform: translateX(-50%);
+}
+
+.cvxLayoutMenu {
+  left: 0;
+  width: 144px;
+  transform: none;
+}
+
+.cvxZoomMenuTitle {
+  min-height: 26px;
+  padding: 0 8px;
+  color: var(--cvx-canvas-muted);
+  font-size: 10px;
+  font-weight: 650;
+  line-height: 26px;
+}
+
+.cvxZoomMenu > button {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  min-height: 32px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--cvx-canvas-radius-sm);
+  color: var(--cvx-canvas-ink);
+  background: transparent;
+  font: inherit;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.cvxZoomMenu > button:hover,
+.cvxZoomMenu > button:focus-visible {
+  outline: none;
+  background: var(--cvx-canvas-hover);
+}
+
+.cvxCanvasError {
+  position: absolute;
+  z-index: 8;
+  right: 18px;
+  bottom: 18px;
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  width: min(380px, calc(100% - 36px));
+  padding: 11px 12px;
+  box-sizing: border-box;
+  border: 1px solid color-mix(in oklab, var(--cvx-canvas-danger) 52%, var(--cvx-canvas-line));
+  border-radius: var(--cvx-canvas-radius-md);
+  color: var(--cvx-canvas-danger);
+  background: var(--cvx-canvas-danger-soft);
+  box-shadow: var(--cvx-canvas-shadow-medium);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.cvxCanvasError button {
+  margin-left: auto;
+  padding: 0;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  cursor: pointer;
+}
+
+.cvxCanvasDropCue {
+  position: absolute;
+  z-index: 6;
+  inset: 12px;
+  display: grid;
+  place-items: center;
+  border: 1px dashed var(--cvx-canvas-accent);
+  border-radius: var(--cvx-canvas-radius-lg);
+  color: var(--cvx-canvas-ink);
+  background: color-mix(in oklab, var(--cvx-canvas-accent) 12%, transparent);
+  pointer-events: none;
+  backdrop-filter: blur(4px);
+}
+
+.cvxCanvasDropCue div {
+  display: grid;
+  justify-items: center;
+  gap: 9px;
+  padding: 18px 26px;
+  border: 1px solid var(--cvx-canvas-line);
+  border-radius: var(--cvx-canvas-radius-lg);
+  background: color-mix(in srgb, var(--cvx-canvas-raised) 92%, transparent);
+  box-shadow: var(--cvx-canvas-shadow-medium);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.cvxCanvasNode {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  box-sizing: border-box;
+  border: 1px solid var(--cvx-canvas-line-strong);
+  border-radius: var(--cvx-canvas-radius-lg);
+  color: var(--cvx-canvas-ink);
+  background: var(--cvx-canvas-raised);
+  box-shadow: var(--cvx-canvas-shadow-low);
+  transition:
+    border-color var(--cvx-canvas-motion-fast) var(--cvx-canvas-ease),
+    box-shadow var(--cvx-canvas-motion-fast) var(--cvx-canvas-ease);
+}
+
+.react-flow__node.selected .cvxCanvasNode {
+  border-color: var(--cvx-canvas-accent-border);
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--cvx-canvas-accent) 18%, transparent), var(--cvx-canvas-shadow-medium);
+}
+
+.cvxCanvasNodeHeader {
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  right: 0;
+  left: 0;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: 35px;
+  padding: 0 10px;
+  box-sizing: border-box;
+  border-bottom: 1px solid var(--cvx-canvas-line);
+  background: color-mix(in srgb, var(--cvx-canvas-panel) 92%, transparent);
+  backdrop-filter: blur(8px);
+}
+
+.cvxCanvasNodeKind {
+  color: var(--cvx-canvas-accent);
+}
+
+.cvxCanvasNodeTitle {
+  overflow: hidden;
+  min-width: 0;
+  color: var(--cvx-canvas-ink);
+  font-size: 11px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cvxCanvasNodeBody {
+  width: 100%;
+  height: 100%;
+  padding-top: 35px;
+  box-sizing: border-box;
+}
+
+.cvxCanvasNoteBody {
+  overflow: hidden;
+  padding: 49px 14px 14px;
+  color: var(--cvx-canvas-secondary);
+  background:
+    linear-gradient(transparent 27px, color-mix(in srgb, var(--cvx-canvas-line) 58%, transparent) 28px),
+    var(--cvx-canvas-raised);
+  background-size: 100% 28px;
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.cvxCanvasMediaBody {
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: var(--cvx-canvas-inset);
+}
+
+.cvxCanvasMediaBody img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: var(--cvx-canvas-inset);
+}
+
+.cvxCanvasMediaEmpty {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  padding: 18px;
+  color: var(--cvx-canvas-muted);
+  font-size: 11px;
+  text-align: center;
+}
+
+.cvxCanvasHandle {
+  width: 9px !important;
+  height: 9px !important;
+  border: 2px solid var(--cvx-canvas-raised) !important;
+  background: var(--cvx-canvas-accent) !important;
+}
+
+.cvxCanvasFlow .react-flow__node.resizing .cvxCanvasNode {
+  transition: none;
+}
+
+.cvxCanvasFlow .react-flow__resize-control.cvxCanvasNodeResizerLine {
+  z-index: 5;
+  border: 0 !important;
+  background-color: transparent !important;
+}
+
+.cvxCanvasFlow .react-flow__resize-control.cvxCanvasNodeResizerLine.left,
+.cvxCanvasFlow .react-flow__resize-control.cvxCanvasNodeResizerLine.right {
+  width: 14px;
+  transform: translate(-50%, 0);
+}
+
+.cvxCanvasFlow .react-flow__resize-control.cvxCanvasNodeResizerLine.top,
+.cvxCanvasFlow .react-flow__resize-control.cvxCanvasNodeResizerLine.bottom {
+  height: 14px;
+  transform: translate(0, -50%);
+}
+
+.cvxCanvasFlow .react-flow__resize-control.cvxCanvasNodeResizerHandle {
+  z-index: 6;
+  display: grid;
+  width: 18px;
+  height: 18px;
+  place-items: center;
+  border: 0;
+  border-radius: 0;
+  background: transparent !important;
+}
+
+.cvxCanvasFlow .react-flow__resize-control.cvxCanvasNodeResizerHandle::after {
+  display: none;
+  content: none;
+}
+
+.cvxCanvasFlow .react-flow__resize-control.line {
+  border-color: var(--cvx-canvas-accent-border);
+}
+
+@media (max-width: 840px) {
+  .cvxCanvasToolbar {
+    left: 12px;
+    transform: none;
+  }
+
+  .cvxCanvasButton span {
+    display: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .cvxCanvasBrandCopy span {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cvxWorkbench,
+  .cvxWorkbenchAgentBody,
+  .cvxCanvasLauncherButton,
+  .cvxCanvasButton,
+  .cvxCanvasIconButton,
+  .cvxCanvasNode {
+    transition: none;
+  }
+}

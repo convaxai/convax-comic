@@ -3,8 +3,10 @@
 ## 总结
 
 Convax Comic 是基于 DeepSeek Harness（DSH）与 Cordis 的 AI 漫画桌面
-产品。本次迁移只建立可运行、可打包、带认证边界的公共基座；漫画工作流、
-项目模型和编辑器需求尚未由产品规格定义，因此不在迁移中臆造实现。
+产品。公共基座已经可运行、可打包并具备认证边界；当前在该基座上完成 C1
+画布交互切片，验证漫画领域 UI 能以独立 Host + Client 插件进入 DSH，而
+不侵入 Electron bootstrap。同一项目内的多个画布已经由 Host 持久化；完整项目模型、
+持久资产库和漫画工作流仍留给后续规格。
 
 基座继承 `convax/convax-next` 的可审计提交历史，并保持以下结构：
 
@@ -35,6 +37,7 @@ Electron Renderer（sandbox、无 Node）
 | 首发平台 | 未签名 macOS ARM64 目录产物 |
 | profile | `compatibility` / `default` |
 | 上游补丁 | 空 |
+| default 附加模型 provider | `dsh-codex-connect@0.1.0-alpha.4.20` |
 
 产品仓库不包含上游源码。`upstream.json` 记录 npm 版本与 source commit
 映射；需要读源码或运行上游构建时，可在仓库同级放置可选的
@@ -53,6 +56,7 @@ app/
     runtime/        appRuntime 服务
     test-consumer/  生命周期证明插件
     ui/             当前最小 Comic 品牌 slot
+    canvas/         Canvas Host service、Agent tools、React Flow UI 与 V1 schema
   profiles/         compatibility / default / 最终安全 overlay
 patches/            上游补丁清单（默认空）
 upstream.json       npm 运行版本与外部源码 commit 映射
@@ -83,17 +87,46 @@ upstream.json       npm 运行版本与外部源码 commit 映射
 ### 组合与 UI
 
 - `compatibility` 始终保留上游 Client roster，作为升级和排障退路。
-- `default` 当前仍使用上游主要 UI，只替换最小品牌 slot。漫画产品 UI
-  必须作为 Client 插件加入；优先使用上游文档化 slot / route。
-- 若整窗漫画编辑器无法由现有 slot 承载，可在同一 Host 与鉴权层后提供
-  Comic 自有路由；不得把领域 UI 塞进 Electron bootstrap。
+- `default` 由 Canvas Client 接管文档化 `root` slot，但 panel 内容不硬编码
+  进壳：左侧继续使用 DSH 官方 `ui-sidebar` 外壳，Canvas 仅注册
+  `sidebar.workspaces` 的漫画项目浏览器；中间是 React Flow 画布；右侧由
+  `workbench.agent` 单一 slot 承载可替换 Agent panel，并由该 panel 继续声明
+  官方 `conversation`、`details` 和可追加 header action slots。产品 `layout`
+  service 保持上游三方法契约，并按 DSH 的宽度、窄屏 rail 与 concession 顺序
+  管理 panel。该替换只存在于 default，`compatibility` 仍保留上游 Client
+  roster 与呈现零覆盖。
+- `default` 额外挂载精确 pin 的 Codex Connect provider，默认模型仍为
+  DeepSeek、全局搜索仍走 DeepSeek；独立搜索、图片查看与图片生成能力启用，
+  proxy 保持关闭，OAuth 只能由用户在设置中显式发起。`compatibility` 不挂载
+  该第三方 provider。
+- 漫画产品 UI 必须作为 Client 插件加入；不得把领域 UI 塞进 Electron
+  bootstrap，也不得自建 Plugin Host、Catalog 或消息 broker。
 - profile 是纯数据，patch 按 id 整行覆盖；新增普通插件只改依赖与 profile。
 
 ### 数据
 
 - `userData/harness` 与 DSH 会话 JSONL 由上游拥有，可在升级时重建。
-- 漫画项目、角色、场景、分镜、媒体资产和导出物必须由未来领域插件放在
-  产品自有目录；具体 schema 与迁移策略在产品需求明确后另记 Agent Note。
+- Canvas 首版定义严格的 `CanvasDocumentV1`，只包含版本、领域节点、边和
+  viewport；React Flow 的选择、拖动中间态、组件、`File` 与 `blob:` URL
+  永不进入文档。最小 `CanvasProjectV1` 只负责 active canvas 与多个独立文档，
+  不混入树展开态或 React Flow UI 状态。Host 的 `ctx.canvas` 是唯一写入权威，经 DSH 官方
+  Typert/Remote 同步 Client，并以 revision 防止陈旧覆盖。
+- Canvas 交互以 Convax 的单一编辑态为基线：节点始终可选择、拖动和连线，
+  不呈现 Hand/Select 工具状态；按住空格时临时以左键平移画布，编辑态中键仍
+  可平移、左键框选。视图条提供适应视图、连线显隐、确定性横/纵整理、8px
+  网格吸附、小地图和缩放。节点 resize 使用宽透明命中区，图片等比、文本自由
+  缩放，并在 gesture 内连续提交位置与尺寸；拖动/缩放历史各合并为一次 undo step。
+- 画布项目原子写入 `$CONVAX_PROJECTS_HOME/default/canvas.canvas.json`，权限
+  为 `0600`；它与 `userData/harness`、DSH session JSONL 完全分离。其他 Host
+  插件可注入 `canvas` service，Agent 通过 `canvas_list/create/select` 与
+  `canvas_get/create_node/update_node/delete_nodes/connect` 工具读写当前画布。
+- 外部图片文件以 opaque asset id 进入文档，`File` 与 object URL 仅在
+  插件的临时资源表中存在，并在节点失去引用或插件卸载时释放。后续持久化
+  必须把资产写入产品自有目录，不得写入 DSH storage、attachments 或会话。
+  V1 中已有的 video 节点仅作无损读取兼容，不再呈现，也不能由 UI、外部拖入
+  或 Agent tool 新建；正式 schema 迁移前不静默删除旧数据。
+- 漫画项目、角色、场景、分镜、媒体资产和导出物最终必须由领域插件放在
+  产品自有目录；持久 schema 与迁移策略在项目工作流明确后继续演进。
 - 后端文件能力优先使用上游 `ctx.fs`，Electron 不新增产品文件 API。
 
 ## 路线图
@@ -101,11 +134,11 @@ upstream.json       npm 运行版本与外部源码 commit 映射
 | 里程碑 | 内容 | 出口条件 |
 | --- | --- | --- |
 | B0（本次） | 导入公共基座；隔离 Convax Comic 名称、bundle id 与 userData | 全量门禁、真实运行与目录打包通过 |
-| C1 | 明确 Comic MVP 工作流、数据模型与整窗 UI 承载方案 | 产品规格与 UI spike 有可评审证据 |
+| C1（当前） | Host-owned Canvas、React Flow 画布与三栏工作台 | 同一项目可持久化多个画布，可新建/操作文本与图片节点、外部拖入图片，Agent/插件经 service 操作当前画布 |
 | C2 | 首个端到端漫画项目工作流 | 可创建、编辑、持久化并导出最小项目 |
 | C3 | 签名、公证、自动更新与 Windows x64 | 双平台可分发 |
 
-C1 之前不预设具体模型供应商、图片生成服务、资产 schema 或协作协议。
+C2 之前不预设具体模型供应商、图片生成服务、持久资产 schema 或协作协议。
 
 ## B0 测试与验收
 
@@ -117,6 +150,10 @@ C1 之前不预设具体模型供应商、图片生成服务、资产 schema 或
 - `yarn package:dir` 生成 `Convax Comic.app`，并在隔离 HOME/CWD、空 PATH、
   无全局 Node/pnpm/上游 checkout 的条件下验证 DSH、PTY、鉴权和数据边界。
 - `compatibility` 保持上游 Client 零覆盖；`default` 的组合差异全部可解释。
+- Canvas 的文档/项目 schema、Host 多画布持久化/revision、Remote 同步、Agent 工具、外部
+  拖拽解析、临时媒体释放与 root slot 卸载均有 headless 测试；React Flow
+  依赖完整内联到动态 Client bundle，不产生孤立 CSS。单一编辑/空格平移策略、
+  核心快捷键、整理布局、批量移动、拖动/缩放历史、无点击/拖动阈值死亡区与非零 viewport 高度有回归测试。
 - preload 暴露面、权限 profile、host/port、source/npm pin 与补丁清单相对
   导入基座无变化。
 
@@ -128,8 +165,9 @@ C1 之前不预设具体模型供应商、图片生成服务、资产 schema 或
 
 ## 假设与默认值
 
-- 当前只是桌面基座，不代表 Comic 产品 UI 已完成；初次运行仍可能显示
-  上游 DSH 的通用设置与会话界面。
+- 当前只完成桌面基座与 Canvas 文档持久化切片，不代表完整 Comic 项目模型、
+  持久媒体资产库或端到端漫画工作流已完成。default 固定进入三栏工作台；
+  需要上游原始界面时显式启动 `compatibility` profile。
 - `@convax/*` 包命名空间、`CONVAX_*` 环境变量、IPC 与 token header 是
   通用基座协议，本次不分叉；应用身份与用户数据由新 bundle id 隔离。
 - 插件按可信本地代码处理；控制面鉴权和保守 Agent 权限仍不可豁免。
