@@ -15,9 +15,9 @@ function ConvaxComicMark(props: Record<string, unknown>): React.ReactElement {
     className: typeof props.className === 'string' ? props.className : undefined,
     style: {
       alignItems: 'center',
-      background: 'linear-gradient(135deg, #7c3aed, #2563eb)',
-      borderRadius: Math.max(6, Math.round(size * 0.3)),
-      color: '#fff',
+      background: 'light-dark(#5c7a00, #c6f22d)',
+      borderRadius: Math.max(6, Math.round(size * 0.28)),
+      color: 'light-dark(#fff, #111217)',
       display: 'inline-flex',
       fontSize: Math.max(10, Math.round(size * 0.5)),
       fontWeight: 800,

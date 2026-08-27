@@ -4,9 +4,19 @@
   still replaces the unauthenticated Host web server, asks before high-confidence
   destructive shell commands, and mounts the private desktop Host service
   because those are mandatory product boundaries.
-- `default` adds `appRuntime`, its lifecycle consumer, and the Convax Comic
-  browser brand plugin. It disables the one upstream row occupying those
-  documented brand slots.
+- `default` adds `appRuntime`, its lifecycle consumer, the Convax Comic browser
+  brand plugin, and the Canvas Host/Client plugin. Canvas owns the documented
+  `root` slot and provides the compatible Client `layout` service, but panel
+  contents remain slot contributions. The official DSH `ui-sidebar` shell stays
+  enabled while `ui-workspace` is released for Canvas to occupy
+  `sidebar.workspaces`; the right `workbench.agent` occupant declares the official
+  `conversation` and `details` child slots plus an additive header-action seat.
+  `compatibility` remains untouched.
+- `default` also mounts the exactly pinned `dsh-codex-connect` provider under
+  its canonical `llm-openai-codex` row. It does not replace the DeepSeek default
+  model or global search route. Standalone Codex search, image viewing, and image
+  generation are enabled, while proxy remains disabled. `compatibility` does not
+  mount this provider.
 
 All patch files are pure data. Config fields replace complete upstream config
 rows; they are not deep merges. `security.patch.yml` is a shared, product-owned

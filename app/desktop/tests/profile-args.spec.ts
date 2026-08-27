@@ -55,11 +55,13 @@ describe('desktop data boundaries', () => {
   it('keeps launch data and logs beside, never under, harness', () => {
     const paths = desktopPaths('/tmp/convax-user-data')
     expect(paths.harnessHome).toBe('/tmp/convax-user-data/harness')
+    expect(paths.projectsHome).toBe('/tmp/convax-user-data/projects')
     expect(paths.launchRoot).toBe('/tmp/convax-user-data/launch-root')
     expect(paths.logs).toBe('/tmp/convax-user-data/logs')
     expect(dirname(paths.launchRoot)).toBe(paths.userData)
     expect(dirname(paths.logs)).toBe(paths.userData)
     expect(dirname(paths.harnessHome)).toBe(paths.userData)
+    expect(dirname(paths.projectsHome)).toBe(paths.userData)
     expect(isAbsolute(paths.harnessHome)).toBe(true)
   })
 
@@ -72,6 +74,7 @@ describe('desktop data boundaries', () => {
       'compatibility',
     )
     expect(env.DSH_HOME).toBe(join(paths.userData, 'harness'))
+    expect(env.CONVAX_PROJECTS_HOME).toBe(join(paths.userData, 'projects'))
     expect(env.CONVAX_PROFILE).toBe('compatibility')
     expect(env.CONVAX_CONTROL_TOKEN).toBe('t'.repeat(43))
     expect(env).not.toHaveProperty('ELECTRON_RUN_AS_NODE')
