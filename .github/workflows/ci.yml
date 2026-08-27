@@ -38,8 +38,12 @@ jobs:
       - name: Install dependencies (immutable)
         run: corepack yarn install --immutable
 
-      - name: Run complete headless gates
-        run: corepack yarn check
+      - name: Run portable headless gates
+        run: |
+          corepack yarn check:ci-config
+          corepack yarn check:layout
+          corepack yarn check:node-compat
+          corepack yarn check:profiles
 
   node-compat:
     name: node ${{ matrix.node }} / compatibility
@@ -91,6 +95,9 @@ jobs:
 
       - name: Package and smoke the final directory
         run: corepack yarn package:dir
+
+      - name: Verify composition with the packaged Node
+        run: corepack yarn check:dump-config
 
   all-checks-passed:
     name: all checks passed

@@ -52,7 +52,16 @@ for (const jobName of ['quality', 'node-compat', 'package-macos']) {
 }
 
 assert(jobs.quality?.['runs-on'] === 'ubuntu-24.04', 'primary quality job is not on pinned Ubuntu 24.04')
-assert(jobs.quality?.steps?.some(step => step.run === 'corepack yarn check'), 'primary quality job does not run the full gate')
+const portableQualityGate = jobs.quality?.steps?.find(step => step.name === 'Run portable headless gates')?.run ?? ''
+for (const command of [
+  'corepack yarn check:ci-config',
+  'corepack yarn check:layout',
+  'corepack yarn check:node-compat',
+  'corepack yarn check:profiles',
+]) {
+  assert(portableQualityGate.split('\n').includes(command), `primary quality job omits ${command}`)
+}
+assert(!portableQualityGate.includes('check:dump-config'), 'Ubuntu quality job invokes the macOS-only dump-config gate')
 assert(
   JSON.stringify(jobs['node-compat']?.strategy?.matrix?.node) === JSON.stringify(['22.19.0', '26']),
   'Node compatibility matrix changed',
@@ -69,6 +78,10 @@ assert(
 assert(
   jobs['package-macos']?.steps?.some(step => step.run === 'corepack yarn package:dir'),
   'packaged smoke does not exercise the final directory',
+)
+assert(
+  jobs['package-macos']?.steps?.some(step => step.run === 'corepack yarn check:dump-config'),
+  'macOS lane does not verify composition with the packaged Node',
 )
 
 const verdict = jobs['all-checks-passed']
