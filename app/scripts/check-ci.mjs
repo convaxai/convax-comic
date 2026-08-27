@@ -25,7 +25,7 @@ assert(workflow.env?.DSH_TELEMETRY_DISABLED === '1', 'CI may report to productio
 assert(workflow.concurrency?.['cancel-in-progress'] === true, 'superseded CI runs are not cancelled')
 
 const jobs = workflow.jobs ?? {}
-const requiredJobs = ['quality', 'node-compat', 'package-macos', 'all-checks-passed']
+const requiredJobs = ['static', 'unit', 'node-compat', 'runtime-macos', 'package-macos', 'all-checks-passed']
 assert(JSON.stringify(Object.keys(jobs)) === JSON.stringify(requiredJobs), 'workflow job inventory changed')
 
 const ACTION_PINS = new Set([
@@ -40,7 +40,7 @@ for (const [jobName, job] of Object.entries(jobs)) {
   }
 }
 
-for (const jobName of ['quality', 'node-compat', 'package-macos']) {
+for (const jobName of ['static', 'unit', 'node-compat', 'runtime-macos', 'package-macos']) {
   const job = jobs[jobName]
   const checkout = job.steps.find(step => step.uses?.startsWith('actions/checkout@'))
   assert(checkout?.with?.['persist-credentials'] === false, `${jobName} persists checkout credentials`)
@@ -51,17 +51,23 @@ for (const jobName of ['quality', 'node-compat', 'package-macos']) {
   assert(job.steps.some(step => step.run === 'corepack yarn install --immutable'), `${jobName} does not install immutably`)
 }
 
-assert(jobs.quality?.['runs-on'] === 'ubuntu-24.04', 'primary quality job is not on pinned Ubuntu 24.04')
-const portableQualityGate = jobs.quality?.steps?.find(step => step.name === 'Run portable headless gates')?.run ?? ''
+assert(jobs.static?.['runs-on'] === 'ubuntu-24.04', 'primary static job is not on pinned Ubuntu 24.04')
+const staticGate = jobs.static?.steps?.find(step => step.name === 'Run static and repository-contract gates')?.run ?? ''
 for (const command of [
   'corepack yarn check:ci-config',
   'corepack yarn check:layout',
-  'corepack yarn check:node-compat',
+  'corepack yarn build',
+  'corepack yarn typecheck',
   'corepack yarn check:profiles',
 ]) {
-  assert(portableQualityGate.split('\n').includes(command), `primary quality job omits ${command}`)
+  assert(staticGate.split('\n').includes(command), `primary static job omits ${command}`)
 }
-assert(!portableQualityGate.includes('check:dump-config'), 'Ubuntu quality job invokes the macOS-only dump-config gate')
+assert(!staticGate.includes('check:dump-config'), 'Ubuntu static job invokes the macOS-only dump-config gate')
+assert(
+  jobs.unit?.steps?.some(step => step.run === 'corepack yarn build')
+    && jobs.unit?.steps?.some(step => step.run === 'corepack yarn test'),
+  'primary unit job does not build a clean checkout before testing',
+)
 assert(
   JSON.stringify(jobs['node-compat']?.strategy?.matrix?.node) === JSON.stringify(['22.19.0', '26']),
   'Node compatibility matrix changed',
@@ -70,6 +76,17 @@ assert(
   jobs['node-compat']?.steps?.some(step => step.run === 'corepack yarn check:node-compat'),
   'Node compatibility job does not run its gate',
 )
+assert(jobs['runtime-macos']?.['runs-on'] === 'macos-15', 'DSH integration is not on macOS 15 arm64')
+assert(
+  jobs['runtime-macos']?.steps?.some(step => step.run?.includes('uname -m') && step.run.includes('arm64')),
+  'DSH integration does not assert runner architecture',
+)
+for (const command of ['corepack yarn build', 'corepack yarn check:dump-config', 'corepack yarn smoke:upstream']) {
+  assert(
+    jobs['runtime-macos']?.steps?.some(step => step.run === command),
+    `DSH integration omits ${command}`,
+  )
+}
 assert(jobs['package-macos']?.['runs-on'] === 'macos-15', 'packaged smoke is not on macOS 15 arm64')
 assert(
   jobs['package-macos']?.steps?.some(step => step.run?.includes('uname -m') && step.run.includes('arm64')),
@@ -79,14 +96,9 @@ assert(
   jobs['package-macos']?.steps?.some(step => step.run === 'corepack yarn package:dir'),
   'packaged smoke does not exercise the final directory',
 )
-assert(
-  jobs['package-macos']?.steps?.some(step => step.run === 'corepack yarn check:dump-config'),
-  'macOS lane does not verify composition with the packaged Node',
-)
-
 const verdict = jobs['all-checks-passed']
 assert(
-  JSON.stringify(verdict?.needs) === JSON.stringify(['quality', 'node-compat', 'package-macos']),
+  JSON.stringify(verdict?.needs) === JSON.stringify(['static', 'unit', 'node-compat', 'runtime-macos', 'package-macos']),
   'stable verdict does not aggregate every required job',
 )
 assert(String(verdict?.if).includes('always()'), 'stable verdict may be skipped after a dependency failure')
@@ -95,4 +107,4 @@ for (const result of ['failure', 'cancelled', 'skipped']) {
   assert(String(failureGuard?.if).includes(result), `stable verdict ignores ${result} dependencies`)
 }
 
-process.stdout.write('CI gate: workflow triggers, action pins, Node lanes, package smoke, and stable verdict pass\n')
+process.stdout.write('CI gate: workflow triggers, action pins, static/unit/compatibility lanes, runtime integration, package smoke, and stable verdict pass\n')

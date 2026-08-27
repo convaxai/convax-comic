@@ -19,8 +19,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  quality:
-    name: node 24.9 / quality gates
+  static:
+    name: node 24.9 / static
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -38,12 +38,40 @@ jobs:
       - name: Install dependencies (immutable)
         run: corepack yarn install --immutable
 
-      - name: Run portable headless gates
+      - name: Run static and repository-contract gates
         run: |
           corepack yarn check:ci-config
           corepack yarn check:layout
-          corepack yarn check:node-compat
+          corepack yarn build
+          corepack yarn typecheck
           corepack yarn check:profiles
+
+  unit:
+    name: node 24.9 / unit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: ${{ env.PRIMARY_NODE_VERSION }}
+
+      - name: Install the pinned package-manager shim
+        run: npm install --global corepack@${COREPACK_VERSION}
+
+      - name: Install dependencies (immutable)
+        run: corepack yarn install --immutable
+
+      # Workspace consumers resolve generated lib/ entries, so a clean CI
+      # checkout must build before tests instead of relying on local artifacts.
+      - name: Build test dependencies
+        run: corepack yarn build
+
+      - name: Run unit and contract tests
+        run: corepack yarn test
 
   node-compat:
     name: node ${{ matrix.node }} / compatibility
@@ -71,6 +99,37 @@ jobs:
       - name: Run Node compatibility gates
         run: corepack yarn check:node-compat
 
+  runtime-macos:
+    name: macOS arm64 / DSH integration
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: ${{ env.PRIMARY_NODE_VERSION }}
+
+      - name: Install the pinned package-manager shim
+        run: npm install --global corepack@${COREPACK_VERSION}
+
+      - name: Require the supported release architecture
+        run: test "$(uname -m)" = arm64
+
+      - name: Install dependencies (immutable)
+        run: corepack yarn install --immutable
+
+      - name: Build source products
+        run: corepack yarn build
+
+      - name: Verify flattened Cordis composition
+        run: corepack yarn check:dump-config
+
+      - name: Exercise both profiles against the real DSH runtime
+        run: corepack yarn smoke:upstream
+
   package-macos:
     name: macOS arm64 / packaged smoke
     runs-on: macos-15
@@ -96,14 +155,11 @@ jobs:
       - name: Package and smoke the final directory
         run: corepack yarn package:dir
 
-      - name: Verify composition with the packaged Node
-        run: corepack yarn check:dump-config
-
   all-checks-passed:
     name: all checks passed
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    needs: [quality, node-compat, package-macos]
+    needs: [static, unit, node-compat, runtime-macos, package-macos]
     if: ${{ always() }}
     steps:
       - name: Fail if any required job did not succeed
