@@ -11,7 +11,7 @@ import {
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
-import { failurePageUrl } from './failure-page.js'
+import { failurePageUrl, loadingPageUrl } from './failure-page.js'
 import {
   desktopPaths,
   ensureDesktopPaths,
@@ -74,6 +74,12 @@ function sendContext(context: Readonly<LaunchContext>): void {
 async function showFailure(message: string): Promise<void> {
   if (mainWindow === null || mainWindow.isDestroyed()) return
   await mainWindow.loadURL(failurePageUrl(message))
+  if (!mainWindow.isVisible()) mainWindow.show()
+}
+
+async function showLoading(message: string): Promise<void> {
+  if (mainWindow === null || mainWindow.isDestroyed()) return
+  await mainWindow.loadURL(loadingPageUrl(message))
   if (!mainWindow.isVisible()) mainWindow.show()
 }
 
@@ -193,7 +199,7 @@ async function startRuntime(): Promise<void> {
     supervisor.on('context', (context) => {
       sendContext(context)
       if (!context.ready && supervisor?.status === 'starting') {
-        void showFailure('DSH 正在安全启动；若超时可重试或查看日志。')
+        void showLoading('DSH 正在安全启动，请稍候。')
       }
     })
     supervisor.on('ready', (context) => {
@@ -230,7 +236,7 @@ async function bootstrap(): Promise<void> {
     currentContext,
     () => mainWindow?.webContents.id ?? null,
   )
-  await showFailure('DSH 正在安全启动。')
+  await showLoading('正在准备本地运行时与插件。')
   await startRuntime()
 }
 
@@ -243,7 +249,7 @@ app.on('activate', () => {
     mainWindow = createMainWindow()
     const context = currentContext()
     if (context.ready) void navigateToRuntime(context)
-    else void showFailure('DSH 正在安全启动。')
+    else void showLoading('DSH 正在安全启动，请稍候。')
   }
 })
 
