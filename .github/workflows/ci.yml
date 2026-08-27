@@ -1,0 +1,109 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PRIMARY_NODE_VERSION: '24.9.0'
+  COREPACK_VERSION: '0.34.1'
+  DSH_TELEMETRY_DISABLED: '1'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: node 24.9 / quality gates
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: ${{ env.PRIMARY_NODE_VERSION }}
+
+      - name: Install the pinned package-manager shim
+        run: npm install --global corepack@${COREPACK_VERSION}
+
+      - name: Install dependencies (immutable)
+        run: corepack yarn install --immutable
+
+      - name: Run complete headless gates
+        run: corepack yarn check
+
+  node-compat:
+    name: node ${{ matrix.node }} / compatibility
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['22.19.0', '26']
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: ${{ matrix.node }}
+
+      - name: Install the pinned package-manager shim
+        run: npm install --global corepack@${COREPACK_VERSION}
+
+      - name: Install dependencies (immutable)
+        run: corepack yarn install --immutable
+
+      - name: Run Node compatibility gates
+        run: corepack yarn check:node-compat
+
+  package-macos:
+    name: macOS arm64 / packaged smoke
+    runs-on: macos-15
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: ${{ env.PRIMARY_NODE_VERSION }}
+
+      - name: Install the pinned package-manager shim
+        run: npm install --global corepack@${COREPACK_VERSION}
+
+      - name: Require the supported release architecture
+        run: test "$(uname -m)" = arm64
+
+      - name: Install dependencies (immutable)
+        run: corepack yarn install --immutable
+
+      - name: Package and smoke the final directory
+        run: corepack yarn package:dir
+
+  all-checks-passed:
+    name: all checks passed
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: [quality, node-compat, package-macos]
+    if: ${{ always() }}
+    steps:
+      - name: Fail if any required job did not succeed
+        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') || contains(needs.*.result, 'skipped')
+        run: |
+          echo "::error::Required job results: ${{ join(needs.*.result, ', ') }}"
+          exit 1
+
+      - name: All required jobs passed
+        run: echo "All required jobs succeeded (${{ join(needs.*.result, ', ') }})"
