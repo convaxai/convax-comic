@@ -64,6 +64,7 @@ async function launch(profile) {
       ...process.env,
       CONVAX_CONTROL_TOKEN: token,
       CONVAX_PROFILE: profile,
+      CONVAX_PROJECTS_HOME: productData,
       DSH_HOME: harnessHome,
       DSH_TELEMETRY_DISABLED: '1',
     },
@@ -154,6 +155,41 @@ async function verifyFence(instance) {
   }
 }
 
+async function verifyCanvasRemote(instance) {
+  const rpcId = `convax-canvas-v2-smoke-${Date.now()}`
+  const response = await fetch(`${instance.origin}/api/canvasV2/getProject`, {
+    method: 'POST',
+    headers: {
+      [HEADER]: instance.token,
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({
+      type: 'client-request',
+      rpcId,
+      method: 'canvasV2/getProject',
+      payload: {
+        args: {
+          request: {
+            workspaceId: 'workspace:default',
+            projectId: 'project:default',
+          },
+        },
+      },
+    }),
+  })
+  const envelope = await response.json()
+  const project = envelope?.result?.value
+  if (response.status !== 200
+    || envelope?.rpcId !== rpcId
+    || envelope?.result?.ok !== true
+    || project?.schemaVersion !== 2
+    || project?.workspaceId !== 'workspace:default'
+    || project?.id !== 'project:default'
+    || project?.activeCanvasId !== 'canvas:main') {
+    throw new Error(`Canvas V2 Remote integration failed: ${JSON.stringify(envelope)}`)
+  }
+}
+
 async function stop(instance, signal = 'SIGTERM') {
   instance.child.kill(signal)
   try {
@@ -172,18 +208,20 @@ try {
 
   const first = await launch('default')
   await verifyFence(first)
+  await verifyCanvasRemote(first)
   first.child.kill('SIGKILL')
   await waitForExit(first.child)
 
   const restarted = await launch('default')
   if (restarted.token === first.token) throw new Error('restart reused the control token')
   await verifyFence(restarted)
+  await verifyCanvasRemote(restarted)
   await stop(restarted)
 
   if (readFileSync(join(productData, 'sentinel'), 'utf8') !== 'product-owned\n') {
     throw new Error('product-owned data changed across runtime restart')
   }
-  process.stdout.write(`upstream smoke: both profiles, trusted security overlay, auth fence, SIGKILL restart, and data boundary pass\n`)
+  process.stdout.write(`upstream smoke: both profiles, trusted security overlay, auth fence, Canvas V2 Remote, SIGKILL restart, and data boundary pass\n`)
 } finally {
   rmSync(root, { recursive: true, force: true })
 }

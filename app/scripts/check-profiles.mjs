@@ -149,7 +149,10 @@ if (securityById.get('sandbox-policy')?.config?.mode !== 'workspace-write'
 if ([...compatibility.byId.keys()].some(id => id.startsWith('ui-'))) {
   fail('compatibility modifies an upstream UI row')
 }
-const PRODUCT_CLIENT_PACKAGES = new Set(['@convax/ui', '@convax/canvas', 'dsh-codex-connect'])
+const PRODUCT_CLIENT_PACKAGES = new Set(['@convax/ui', '@convax/canvas', '@convax/canvas-builtins', 'dsh-codex-connect'])
+if (compatibility.insertedById.get('app-sqlite-runtime')?.name !== '@convax/sqlite-runtime') {
+  fail('compatibility does not mount the shared Host-only SQLite runtime')
+}
 if ([...compatibility.insertedById.values()].some(row => PRODUCT_CLIENT_PACKAGES.has(row.name))) {
   fail('compatibility mounts a product Client UI')
 }
@@ -169,7 +172,10 @@ for (const [id, packageName] of [
   ['app-runtime', '@convax/runtime'],
   ['app-test-consumer', '@convax/test-consumer'],
   ['app-ui', '@convax/ui'],
+  ['app-sqlite-runtime', '@convax/sqlite-runtime'],
+  ['app-canvas-store-sqlite', '@convax/canvas-store-sqlite'],
   ['app-canvas', '@convax/canvas'],
+  ['app-canvas-builtins', '@convax/canvas-builtins'],
 ]) {
   if (defaultProfile.insertedById.get(id)?.name !== packageName) fail(`default is missing ${id}`)
 }

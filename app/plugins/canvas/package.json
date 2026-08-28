@@ -7,13 +7,15 @@
   "main": "lib/index.js",
   "exports": {
     ".": "./lib/index.js",
-    "./schema": "./lib/schema.js",
-    "./typert": "./lib/typert.js",
-    "./remote": "./lib/remote.js",
     "./client": "./lib/client.js",
     "./package.json": "./package.json"
   },
   "dsh": {
+    "host": {
+      "inject": [
+        "@convax/canvas-store-sqlite"
+      ]
+    },
     "client": {
       "inject": [
         "@deepseek-ai/dsh-api-remotes",
@@ -30,6 +32,9 @@
     "zod": "^4.4.3"
   },
   "peerDependencies": {
+    "@convax/canvas-api": "workspace:*",
+    "@convax/canvas-builtins": "workspace:*",
+    "@convax/canvas-store-api": "workspace:*",
     "@deepseek-ai/cordis": "4.0.1",
     "@deepseek-ai/dsh-api-remotes": "0.1.1-rc.2",
     "@deepseek-ai/dsh-client-runtime": "0.1.1-rc.2",

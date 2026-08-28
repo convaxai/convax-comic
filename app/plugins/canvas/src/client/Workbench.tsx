@@ -27,12 +27,12 @@ import {
   WorkbenchLayout,
   solveWorkbenchColumns,
 } from './layout.ts'
-import { CanvasWorkspace } from './store.ts'
-import type { CanvasRemoteSync } from './remote-sync.ts'
+import { ComicCanvasWorkspace } from './comic-workspace-v2.js'
+import type { CanvasProjectSync } from './project-sync-v2.js'
 
 type RenderSlot = (name: string, owner: Record<string, unknown>) => ReactNode
 
-function useWorkspace(workspace: CanvasWorkspace) {
+function useWorkspace(workspace: ComicCanvasWorkspace) {
   return useSyncExternalStore(workspace.subscribe, workspace.getSnapshot, workspace.getSnapshot)
 }
 
@@ -110,7 +110,7 @@ function ResizeHandle(props: ResizeHandleProps): ReactElement {
 }
 
 export interface CanvasWorkbenchProps {
-  readonly workspace: CanvasWorkspace
+  readonly workspace: ComicCanvasWorkspace
   readonly layout: WorkbenchLayout
   readonly renderSlot: RenderSlot
 }
@@ -202,8 +202,8 @@ export function CanvasWorkbench({ workspace, layout, renderSlot }: CanvasWorkben
 }
 
 export interface CanvasProjectBrowserProps {
-  readonly workspace: CanvasWorkspace
-  readonly project: CanvasRemoteSync
+  readonly workspace: ComicCanvasWorkspace
+  readonly project: CanvasProjectSync
   readonly wide: boolean
   readonly expandSidebar: () => void
 }
@@ -214,8 +214,8 @@ export function CanvasProjectBrowser({ workspace, project, wide, expandSidebar }
   const projectSnapshot = useSyncExternalStore(project.subscribe, project.getSnapshot, project.getSnapshot)
   const [projectError, setProjectError] = useState<string>()
   const mediaNodes = snapshot.document.nodes.filter(node => node.kind === 'image')
-  const visibleNodes = snapshot.document.nodes.filter(node => node.kind !== 'video')
-  const runProjectAction = (action: () => Promise<void>): void => {
+  const visibleNodes = snapshot.document.nodes
+  const runProjectAction = (action: () => Promise<unknown>): void => {
     setProjectError(undefined)
     void action().catch(error => { setProjectError(error instanceof Error ? error.message : String(error)) })
   }

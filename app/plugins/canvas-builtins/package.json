@@ -1,0 +1,51 @@
+{
+  "name": "@convax/canvas-builtins",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Built-in Convax Comic Canvas node and edge types",
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "host": {
+      "inject": [
+        "@convax/canvas"
+      ]
+    },
+    "client": {
+      "inject": [
+        "@convax/canvas"
+      ],
+      "platform": "web"
+    }
+  },
+  "peerDependencies": {
+    "@convax/canvas-api": "workspace:*",
+    "@deepseek-ai/cordis": "4.0.1",
+    "react": "18.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.0",
+    "@types/react": "^18.3.1",
+    "react": "18.3.1",
+    "tsdown": "0.22.2",
+    "typescript": "6.0.3",
+    "vitest": "4.1.8"
+  },
+  "files": [
+    "lib/**"
+  ],
+  "scripts": {
+    "build": "tsdown",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  }
+}

@@ -10,16 +10,18 @@ DSH 上游把主 Node 静态门禁、版本兼容、消费者产物、覆盖率�
 ## 决策
 
 - PR、main push 和手动触发共用一个 `CI` workflow；过期的同 ref run 自动取消。
-- `node 24.9 / quality gates` 在 Ubuntu 24.04 执行 immutable install 和所有
-  可移植的 headless 门禁，覆盖 workflow 自检、布局、构建、typecheck、测试、
-  安全与 profile；`dump-config` 必须使用产品打包的 macOS ARM64 Node，因此不在
-  Linux runner 伪造运行环境。
+- `node 24.9 / static` 在 Ubuntu 24.04 执行 workflow 自检、布局、构建、
+  typecheck 与 profile 静态契约；`node 24.9 / unit` 从干净 checkout 先构建
+  workspace 依赖，再独立运行所有单元与契约测试，避免本地残留 `lib/` 造成假绿。
 - `node 22.19 / compatibility` 与 `node 26 / compatibility` 只验证构建、类型和
   单测，分别覆盖根 manifest 声明的最低 Node 与前进兼容面；产品打包运行时仍
   精确固定 Node 24.9.0。
+- `macOS arm64 / DSH integration` 使用产品携带的 Node 检查 `dump-config` 基线，
+  并真实启动 compatibility/default 两个 profile，验证安全 overlay、auth fence、
+  强制退出恢复和产品数据边界。该过程依赖 macOS ARM64 Node，不在 Linux runner
+  伪造运行环境。
 - `macOS arm64 / packaged smoke` 固定使用 `macos-15` Apple Silicon runner，先
-  断言 `uname -m = arm64`，再执行目录打包和隔离 runtime/PTY/fence/data smoke，
-  最后用产品实际携带的 Node 执行 `dump-config` 组合基线门禁。
+  断言 `uname -m = arm64`，再对最终目录执行隔离 runtime/PTY/fence/data smoke。
 - `all checks passed` 是唯一稳定的分支保护候选，使用 `if: always()`，任何依赖
   的 failure、cancelled 或 skipped 都显式失败。
 - workflow 只有 `contents: read`；checkout 不保留凭据；第三方 Actions 使用完整

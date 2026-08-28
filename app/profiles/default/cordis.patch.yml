@@ -75,6 +75,9 @@
       config:
         profile: default
 
+    - id: app-sqlite-runtime
+      name: '@convax/sqlite-runtime'
+
     # Deliberately precedes its provider: Cordis inject, not row order, owns
     # activation.
     - id: app-test-consumer
@@ -88,8 +91,14 @@
     - id: app-ui
       name: '@convax/ui'
 
+    - id: app-canvas-store-sqlite
+      name: '@convax/canvas-store-sqlite'
+
     - id: app-canvas
       name: '@convax/canvas'
+
+    - id: app-canvas-builtins
+      name: '@convax/canvas-builtins'
 
     # Keep the third-party package's canonical row id so its diagnostics and
     # keyed Plugin configuration surface identify the official provider.

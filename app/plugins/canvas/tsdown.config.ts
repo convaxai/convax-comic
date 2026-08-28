@@ -22,12 +22,7 @@ function isClientExternal(specifier: string): boolean {
 export default defineConfig([
   {
     name: PACKAGE_NAME,
-    entry: {
-      index: 'src/index.ts',
-      schema: 'src/schema.ts',
-      typert: 'src/typert.ts',
-      remote: 'src/remote.ts',
-    },
+    entry: { index: 'src/index.ts' },
     outDir: 'lib',
     format: 'esm',
     platform: 'node',
@@ -38,6 +33,9 @@ export default defineConfig([
     sourcemap: true,
     deps: {
       neverBundle: [
+        '@convax/canvas-api',
+        '@convax/canvas-builtins',
+        '@convax/canvas-store-api',
         '@deepseek-ai/cordis',
         '@deepseek-ai/dsh-tools',
         '@deepseek-ai/dsh-typert-protocol',
