@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { CanvasNodeV1 } from '../src/schema.ts'
+import type { ComicCanvasNode } from '../src/client/comic-ui-contract.ts'
 import {
   applyCanvasSelectionChanges,
   CANVAS_NODE_POINTER_POLICY,
@@ -19,7 +19,7 @@ function shortcut(key: string, overrides: Partial<Parameters<typeof resolveCanva
   })
 }
 
-function note(id: string, x: number, y: number, width = 200, height = 120): CanvasNodeV1 {
+function note(id: string, x: number, y: number, width = 200, height = 120): ComicCanvasNode {
   return { id, kind: 'note', title: id, text: '', position: { x, y }, size: { width, height } }
 }
 

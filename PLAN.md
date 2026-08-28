@@ -5,8 +5,9 @@
 Convax Comic 是基于 DeepSeek Harness（DSH）与 Cordis 的 AI 漫画桌面
 产品。公共基座已经可运行、可打包并具备认证边界；当前在该基座上完成 C1
 画布交互切片，验证漫画领域 UI 能以独立 Host + Client 插件进入 DSH，而
-不侵入 Electron bootstrap。同一项目内的多个画布已经由 Host 持久化；完整项目模型、
-持久资产库和漫画工作流仍留给后续规格。
+不侵入 Electron bootstrap。同一项目内的多个画布已经由 Host 经可插拔
+`canvasStore` 持久化到产品目录内的 SQLite；完整项目模型、持久资产库和漫画
+工作流仍留给后续规格。
 
 基座继承 `convax/convax-next` 的可审计提交历史，并保持以下结构：
 
@@ -56,7 +57,12 @@ app/
     runtime/        appRuntime 服务
     test-consumer/  生命周期证明插件
     ui/             当前最小 Comic 品牌 slot
-    canvas/         Canvas Host service、Agent tools、React Flow UI 与 V1 schema
+    canvas-api/     JSON-only V2 contract、leaf Patch 与 Host/Client 扩展接口
+    sqlite-runtime/ 通用 owner-scoped SQLite 生命周期、migration 与事务运行时
+    canvas-store-api/ Canvas 持久化 provider 契约
+    canvas-store-sqlite/ 基于 sqliteRuntime 的默认 CanvasStore provider
+    canvas/         Canvas V2 Host/Client、Typert Remote、Agent tools 与 React Flow UI
+    canvas-builtins/ 可独立卸载的 note/image/sequence Host 类型与 Client renderer
   profiles/         compatibility / default / 最终安全 overlay
 patches/            上游补丁清单（默认空）
 upstream.json       npm 运行版本与外部源码 commit 映射
@@ -106,25 +112,37 @@ upstream.json       npm 运行版本与外部源码 commit 映射
 ### 数据
 
 - `userData/harness` 与 DSH 会话 JSONL 由上游拥有，可在升级时重建。
-- Canvas 首版定义严格的 `CanvasDocumentV1`，只包含版本、领域节点、边和
-  viewport；React Flow 的选择、拖动中间态、组件、`File` 与 `blob:` URL
-  永不进入文档。最小 `CanvasProjectV1` 只负责 active canvas 与多个独立文档，
-  不混入树展开态或 React Flow UI 状态。Host 的 `ctx.canvas` 是唯一写入权威，经 DSH 官方
-  Typert/Remote 同步 Client，并以 revision 防止陈旧覆盖。
+- Canvas 使用严格的 `schemaVersion: 2` Contract：项目与文档各自带 revision，
+  node/edge 以 ID map 保存 `type + kindVersion`、核心几何和 JSON-safe 插件 data；
+  React Flow 选择、历史、拖动中间态、组件、`File` 与 `blob:` URL 永不持久化。
+  Host 的 `ctx.canvasHost` 是唯一权威，执行叶级 Patch、文档/project 双重 CAS、
+  原子 active-canvas mutation 与 committed-after-persist 事件；Client 的
+  `ctx.canvasClient` 使用乐观 overlay、串行写入、单一有界 waiter 和 session-only
+  undo/redo，经严格 Typert `canvasV2` namespace 同步。旧 V1 payload 返回稳定的
+  `UNSUPPORTED_SCHEMA_VERSION`，没有自动迁移、JSON fallback 或双写。
 - Canvas 交互以 Convax 的单一编辑态为基线：节点始终可选择、拖动和连线，
   不呈现 Hand/Select 工具状态；按住空格时临时以左键平移画布，编辑态中键仍
   可平移、左键框选。视图条提供适应视图、连线显隐、确定性横/纵整理、8px
   网格吸附、小地图和缩放。节点 resize 使用宽透明命中区，图片等比、文本自由
   缩放，并在 gesture 内连续提交位置与尺寸；拖动/缩放历史各合并为一次 undo step。
-- 画布项目原子写入 `$CONVAX_PROJECTS_HOME/default/canvas.canvas.json`，权限
-  为 `0600`；它与 `userData/harness`、DSH session JSONL 完全分离。其他 Host
-  插件可注入 `canvas` service，Agent 通过 `canvas_list/create/select` 与
-  `canvas_get/create_node/update_node/delete_nodes/connect` 工具读写当前画布。
-- 外部图片文件以 opaque asset id 进入文档，`File` 与 object URL 仅在
-  插件的临时资源表中存在，并在节点失去引用或插件卸载时释放。后续持久化
-  必须把资产写入产品自有目录，不得写入 DSH storage、attachments 或会话。
-  V1 中已有的 video 节点仅作无损读取兼容，不再呈现，也不能由 UI、外部拖入
-  或 Agent tool 新建；正式 schema 迁移前不静默删除旧数据。
+- `sqliteRuntime` 是 Host-only 通用能力，为每个 owner/name 在产品目录下提供
+  独立 SQLite 数据库、顺序 migration、受控事务、WAL checkpoint 和绑定 Cordis
+  Fiber 的 lease；它不拥有任何领域表，也不允许路径逃逸。`compatibility` 与
+  `default` 均挂载该无呈现能力，只有消费者 acquire 后才打开数据库。
+- Canvas 通过 required `canvasStore` 契约使用默认 `canvas-store-sqlite` provider，
+  权威数据位于 `$CONVAX_PROJECTS_HOME/default/.stores/sqlite/canvas/canvas.sqlite3`
+  并保持 `0600`；SQLite 以 `(workspaceId, projectId)` 复合身份隔离项目，写入前
+  严格验证 V2 payload 身份与 revision。provider 缺失时 Canvas 保持 `PENDING`，
+  打开、迁移或写入失败时明确失败，绝不自动切换 JSON。其他 Host 插件注入
+  `canvasHost` 注册类型或执行权威操作；Client 插件注入 `canvasClient` 注册 renderer。
+  Agent 仍通过精确八个 `canvas_list/create/select` 与
+  `canvas_get/create_node/update_node/delete_nodes/connect` 工具读写同一权威。
+- `@convax/canvas-builtins` 是独立 physical plugin：Host 贡献
+  `comic.note@1`、`comic.image@1`、`comic.sequence@1`，Client 对称贡献 renderer。
+  type registry 以 `(type, kindVersion)` 建键，插件缺失或版本不匹配的既存 data
+  无损只读，仍可移动、resize、连接和原子删除；外部图片 `File` 与 object URL
+  只在临时资源表存在并在失去引用或插件卸载时释放。后续持久资产必须写入
+  产品自有目录，不得写入 DSH storage、attachments 或会话。
 - 漫画项目、角色、场景、分镜、媒体资产和导出物最终必须由领域插件放在
   产品自有目录；持久 schema 与迁移策略在项目工作流明确后继续演进。
 - 后端文件能力优先使用上游 `ctx.fs`，Electron 不新增产品文件 API。
@@ -153,8 +171,12 @@ C2 之前不预设具体模型供应商、图片生成服务、持久资产 sche
   类型与单测，并在 `macos-15` ARM64 runner 跑最终目录打包 smoke；稳定的
   `all checks passed` 聚合任何 failure、cancelled 或 skipped 结果。
 - `compatibility` 保持上游 Client 零覆盖；`default` 的组合差异全部可解释。
-- Canvas 的文档/项目 schema、Host 多画布持久化/revision、Remote 同步、Agent 工具、外部
-  拖拽解析、临时媒体释放与 root slot 卸载均有 headless 测试；React Flow
+- SQLite runtime 的路径隔离、application id、顺序 migration、事务回滚、lease
+  回收与 provider 卸载/恢复，以及 CanvasStore workspace 复合身份/CAS、Canvas
+  两级 required provider `PENDING`/恢复均有 headless 测试。Canvas V2 的严格
+  schema/leaf Patch、Host 多画布 revision/active CAS、Typert Remote、单 waiter、
+  乐观 Client、builtins 生命周期、Agent 工具、外部拖拽、临时媒体释放与 root
+  slot 卸载均有 headless 测试；React Flow
   依赖完整内联到动态 Client bundle，不产生孤立 CSS。单一编辑/空格平移策略、
   核心快捷键、整理布局、批量移动、拖动/缩放历史、无点击/拖动阈值死亡区与非零 viewport 高度有回归测试。
 - preload 暴露面、权限 profile、host/port、source/npm pin 与补丁清单相对

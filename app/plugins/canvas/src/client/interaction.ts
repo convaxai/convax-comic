@@ -1,5 +1,4 @@
-import type { CanvasNodeV1 } from '../schema.ts'
-import type { CanvasMoveNodeInput } from './store.ts'
+import type { CanvasMoveNodeInput, ComicCanvasNode } from './comic-ui-contract.js'
 
 export type CanvasLayoutDirection = 'horizontal' | 'vertical'
 
@@ -80,7 +79,7 @@ export function resolveCanvasShortcut(input: {
 
 /** A deterministic, dependency-free tidy pass suitable for the current flat Canvas schema. */
 export function tidyCanvasNodes(
-  nodes: readonly CanvasNodeV1[],
+  nodes: readonly ComicCanvasNode[],
   direction: CanvasLayoutDirection,
 ): readonly CanvasMoveNodeInput[] {
   if (nodes.length === 0) return Object.freeze([])

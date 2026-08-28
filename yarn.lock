@@ -497,6 +497,65 @@ __metadata:
   languageName: unknown
   linkType: soft
 
+"@convax/canvas-api@workspace:*, @convax/canvas-api@workspace:app/plugins/canvas-api":
+  version: 0.0.0-use.local
+  resolution: "@convax/canvas-api@workspace:app/plugins/canvas-api"
+  dependencies:
+    "@types/node": "npm:^22.20.0"
+    "@types/react": "npm:^18.3.1"
+    tsdown: "npm:0.22.2"
+    typescript: "npm:6.0.3"
+    vitest: "npm:4.1.8"
+  peerDependencies:
+    "@deepseek-ai/cordis": 4.0.1
+    react: 18.3.1
+  languageName: unknown
+  linkType: soft
+
+"@convax/canvas-builtins@workspace:*, @convax/canvas-builtins@workspace:app/plugins/canvas-builtins":
+  version: 0.0.0-use.local
+  resolution: "@convax/canvas-builtins@workspace:app/plugins/canvas-builtins"
+  dependencies:
+    "@types/node": "npm:^22.20.0"
+    "@types/react": "npm:^18.3.1"
+    react: "npm:18.3.1"
+    tsdown: "npm:0.22.2"
+    typescript: "npm:6.0.3"
+    vitest: "npm:4.1.8"
+  peerDependencies:
+    "@convax/canvas-api": "workspace:*"
+    "@deepseek-ai/cordis": 4.0.1
+    react: 18.3.1
+  languageName: unknown
+  linkType: soft
+
+"@convax/canvas-store-api@workspace:*, @convax/canvas-store-api@workspace:app/plugins/canvas-store-api":
+  version: 0.0.0-use.local
+  resolution: "@convax/canvas-store-api@workspace:app/plugins/canvas-store-api"
+  dependencies:
+    "@types/node": "npm:^22.20.0"
+    tsdown: "npm:0.22.2"
+    typescript: "npm:6.0.3"
+    vitest: "npm:4.1.8"
+  languageName: unknown
+  linkType: soft
+
+"@convax/canvas-store-sqlite@workspace:*, @convax/canvas-store-sqlite@workspace:app/plugins/canvas-store-sqlite":
+  version: 0.0.0-use.local
+  resolution: "@convax/canvas-store-sqlite@workspace:app/plugins/canvas-store-sqlite"
+  dependencies:
+    "@types/node": "npm:^22.20.0"
+    tsdown: "npm:0.22.2"
+    typescript: "npm:6.0.3"
+    vitest: "npm:4.1.8"
+  peerDependencies:
+    "@convax/canvas-api": "workspace:*"
+    "@convax/canvas-store-api": "workspace:*"
+    "@convax/sqlite-runtime": "workspace:*"
+    "@deepseek-ai/cordis": 4.0.1
+  languageName: unknown
+  linkType: soft
+
 "@convax/canvas@workspace:*, @convax/canvas@workspace:app/plugins/canvas":
   version: 0.0.0-use.local
   resolution: "@convax/canvas@workspace:app/plugins/canvas"
@@ -512,6 +571,9 @@ __metadata:
     vitest: "npm:4.1.8"
     zod: "npm:^4.4.3"
   peerDependencies:
+    "@convax/canvas-api": "workspace:*"
+    "@convax/canvas-builtins": "workspace:*"
+    "@convax/canvas-store-api": "workspace:*"
     "@deepseek-ai/cordis": 4.0.1
     "@deepseek-ai/dsh-api-remotes": 0.1.1-rc.2
     "@deepseek-ai/dsh-client-runtime": 0.1.1-rc.2
@@ -546,8 +608,13 @@ __metadata:
     "@convax/agent-presets": "workspace:*"
     "@convax/auth-fence": "workspace:*"
     "@convax/canvas": "workspace:*"
+    "@convax/canvas-api": "workspace:*"
+    "@convax/canvas-builtins": "workspace:*"
+    "@convax/canvas-store-api": "workspace:*"
+    "@convax/canvas-store-sqlite": "workspace:*"
     "@convax/command-guard": "workspace:*"
     "@convax/runtime": "workspace:*"
+    "@convax/sqlite-runtime": "workspace:*"
     "@convax/test-consumer": "workspace:*"
     "@convax/ui": "workspace:*"
     "@deepseek-ai/cordis": "npm:4.0.1"
@@ -678,6 +745,19 @@ __metadata:
 "@convax/runtime@workspace:*, @convax/runtime@workspace:app/plugins/runtime":
   version: 0.0.0-use.local
   resolution: "@convax/runtime@workspace:app/plugins/runtime"
+  dependencies:
+    "@types/node": "npm:^22.20.0"
+    tsdown: "npm:0.22.2"
+    typescript: "npm:6.0.3"
+    vitest: "npm:4.1.8"
+  peerDependencies:
+    "@deepseek-ai/cordis": 4.0.1
+  languageName: unknown
+  linkType: soft
+
+"@convax/sqlite-runtime@workspace:*, @convax/sqlite-runtime@workspace:app/plugins/sqlite-runtime":
+  version: 0.0.0-use.local
+  resolution: "@convax/sqlite-runtime@workspace:app/plugins/sqlite-runtime"
   dependencies:
     "@types/node": "npm:^22.20.0"
     tsdown: "npm:0.22.2"
@@ -6703,7 +6783,12 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "convax-comic@workspace:."
   dependencies:
+    "@convax/canvas-api": "workspace:*"
+    "@convax/canvas-builtins": "workspace:*"
+    "@convax/canvas-store-api": "workspace:*"
+    "@convax/canvas-store-sqlite": "workspace:*"
     "@convax/runtime": "workspace:*"
+    "@convax/sqlite-runtime": "workspace:*"
     "@deepseek-ai/cordis": "npm:4.0.1"
     "@deepseek-ai/dsh": "npm:0.1.1-rc.2"
     "@deepseek-ai/dsh-agent": "npm:0.1.1-rc.2"
@@ -6725,6 +6810,7 @@ __metadata:
     "@types/react": "npm:^18.3.1"
     electron: "npm:43.4.0"
     electron-builder: "npm:26.15.7"
+    react: "npm:18.3.1"
     tsdown: "npm:0.22.2"
     typescript: "npm:6.0.3"
     vitest: "npm:4.1.8"

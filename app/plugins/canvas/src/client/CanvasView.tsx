@@ -1,6 +1,8 @@
 import {
   Background,
   BackgroundVariant,
+  BaseEdge,
+  getBezierPath,
   Handle,
   MiniMap,
   NodeResizer,
@@ -10,6 +12,8 @@ import {
   type Connection,
   type Edge,
   type EdgeChange,
+  type EdgeProps,
+  type EdgeTypes,
   type Node,
   type NodeChange,
   type NodeProps,
@@ -33,13 +37,17 @@ import {
   type SVGProps,
 } from 'react'
 import {
-  CANVAS_DROP_MIME_V1,
+  CANVAS_DROP_MIME,
   parseCanvasDropPayload,
-  type CanvasDropPayloadV1,
-  type CanvasNodeV1,
-  type CanvasPointV1,
-} from '../schema.ts'
-import { CanvasWorkspace, type CanvasWorkspaceSnapshot } from './store.ts'
+  type ComicCanvasDropPayload,
+  type ComicCanvasNode,
+  type ComicCanvasPoint,
+} from './comic-ui-contract.js'
+import {
+  ComicCanvasWorkspace,
+  type ComicCanvasNodeProjection,
+  type ComicCanvasWorkspaceSnapshot,
+} from './comic-workspace-v2.js'
 import {
   applyCanvasSelectionChanges,
   CANVAS_NODE_POINTER_POLICY,
@@ -145,12 +153,12 @@ export function CanvasStyles(): ReactElement {
   return <style data-convax-canvas-style>{flowCss}{'\n'}{canvasCss}</style>
 }
 
-function useWorkspaceSnapshot(workspace: CanvasWorkspace): CanvasWorkspaceSnapshot {
+function useWorkspaceSnapshot(workspace: ComicCanvasWorkspace): ComicCanvasWorkspaceSnapshot {
   return useSyncExternalStore(workspace.subscribe, workspace.getSnapshot, workspace.getSnapshot)
 }
 
 export interface CanvasLauncherProps {
-  readonly workspace: CanvasWorkspace
+  readonly workspace: ComicCanvasWorkspace
   /** The sidebar passes false while rendering its compact rail. */
   readonly wide?: boolean
 }
@@ -177,36 +185,54 @@ export function CanvasLauncher({ workspace, wide = true }: CanvasLauncherProps):
 }
 
 type CanvasFlowData = {
-  readonly domain: CanvasNodeV1
+  readonly domain: ComicCanvasNodeProjection
   readonly previewUrl?: string
   readonly resizeVisible: boolean
 } & Record<string, unknown>
 
 type CanvasFlowNode = Node<CanvasFlowData, 'canvas'>
-type CanvasFlowEdge = Edge<Record<string, never>>
+type CanvasFlowEdge = Edge<{ readonly domainId: string }, 'canvas'>
 
-const WorkspaceContext = createContext<CanvasWorkspace | null>(null)
+const WorkspaceContext = createContext<ComicCanvasWorkspace | null>(null)
 
-function useCanvasWorkspace(): CanvasWorkspace {
+function useComicCanvasWorkspace(): ComicCanvasWorkspace {
   const workspace = useContext(WorkspaceContext)
-  if (workspace === null) throw new Error('Canvas node rendered without a CanvasWorkspace')
+  if (workspace === null) throw new Error('Canvas node rendered without a ComicCanvasWorkspace')
   return workspace
 }
 
-export function kindLabel(kind: CanvasNodeV1['kind']): string {
+export function kindLabel(kind: ComicCanvasNode['kind']): string {
   if (kind === 'note') return '文本'
   if (kind === 'image') return '图片'
   return '旧视频'
 }
 
-export function KindIcon({ kind, size = 15 }: { readonly kind: CanvasNodeV1['kind']; readonly size?: number }): ReactElement {
+export function KindIcon({ kind, size = 15 }: { readonly kind: ComicCanvasNode['kind']; readonly size?: number }): ReactElement {
   if (kind === 'note') return <NoteIcon size={size} />
   return <ImageIcon size={size} />
 }
 
 const CanvasNodeCard = memo(function CanvasNodeCard({ id, data, selected }: NodeProps<CanvasFlowNode>): ReactElement {
-  const workspace = useCanvasWorkspace()
+  const workspace = useComicCanvasWorkspace()
+  useSyncExternalStore(workspace.renderers.subscribe, workspace.renderers.getSnapshot, workspace.renderers.getSnapshot)
   const node = data.domain
+  const unknown = 'readOnlyData' in node && node.readOnlyData === true
+  const v2Node = workspace.getV2Node(id)
+  const NodeRenderer = v2Node === undefined
+    ? undefined
+    : workspace.renderers.resolveNode(v2Node.type, v2Node.kindVersion)
+  const pluginActions = v2Node === undefined ? undefined : {
+    update: (changes: Parameters<ComicCanvasWorkspace['updateV2Node']>[1]) => workspace.updateV2Node(id, changes),
+    remove: () => workspace.removeV2Node(id),
+    select: (next = true) => {
+      const current = workspace.getSnapshot().selection
+      workspace.setSelection({
+        nodeIds: next ? [...new Set([...current.nodeIds, id])] : current.nodeIds.filter(nodeId => nodeId !== id),
+        edgeIds: current.edgeIds,
+      })
+    },
+    focus: () => { workspace.selectNode(id) },
+  }
   // React Flow tears down the active resize gesture when these callback
   // identities change. Keep them stable while controlled geometry updates
   // re-render the node so onResizeEnd can close the undo transaction.
@@ -233,23 +259,25 @@ const CanvasNodeCard = memo(function CanvasNodeCard({ id, data, selected }: Node
         onResize={resize}
         onResizeEnd={endResize}
       />
-      <div className="cvxCanvasNode" data-kind={node.kind}>
+      <div className="cvxCanvasNode" data-kind={unknown ? 'unknown' : node.kind}>
         <div className="cvxCanvasNodeHeader">
           <span className="cvxCanvasNodeKind"><KindIcon kind={node.kind} /></span>
           <span className="cvxCanvasNodeTitle">{node.title || kindLabel(node.kind)}</span>
         </div>
-        {node.kind === 'note' && (
-          <div className="cvxCanvasNodeBody cvxCanvasNoteBody">
-            {node.text || '空白文本节点'}
+        {node.kind === 'image' && data.previewUrl !== undefined ? (
+          <div className="cvxCanvasNodeBody cvxCanvasMediaBody" data-canvas-temporary-preview>
+            <img src={data.previewUrl} alt={node.alt || node.title} draggable={false} />
           </div>
-        )}
-        {node.kind === 'image' && (
-          <div className="cvxCanvasNodeBody cvxCanvasMediaBody">
-            {data.previewUrl === undefined
-              ? <MediaPlaceholder kind="image" />
-              : <img src={data.previewUrl} alt={node.alt || node.title} draggable={false} />}
+        ) : NodeRenderer !== undefined && v2Node !== undefined && pluginActions !== undefined ? (
+          <div className="cvxCanvasNodeBody" data-canvas-plugin-node={v2Node.type}>
+            <NodeRenderer
+              sessionId={workspace.sessionId}
+              node={v2Node}
+              selected={selected}
+              actions={pluginActions}
+            />
           </div>
-        )}
+        ) : null}
       </div>
       <Handle className="cvxCanvasHandle" type="target" position={Position.Left} />
       <Handle className="cvxCanvasHandle" type="source" position={Position.Right} />
@@ -257,16 +285,68 @@ const CanvasNodeCard = memo(function CanvasNodeCard({ id, data, selected }: Node
   )
 })
 
-function MediaPlaceholder({ kind }: { readonly kind: 'image' }): ReactElement {
-  return (
-    <div className="cvxCanvasMediaEmpty">
-      <ImageIcon size={26} />
-      <span>将图片拖入画布</span>
-    </div>
+const CanvasEdgeLine = memo(function CanvasEdgeLine({
+  id,
+  data,
+  selected,
+  sourceX,
+  sourceY,
+  targetX,
+  targetY,
+  sourcePosition,
+  targetPosition,
+  markerEnd,
+  style,
+}: EdgeProps<CanvasFlowEdge>): ReactElement {
+  const workspace = useComicCanvasWorkspace()
+  useSyncExternalStore(workspace.renderers.subscribe, workspace.renderers.getSnapshot, workspace.renderers.getSnapshot)
+  const edge = workspace.getV2Edge(data?.domainId ?? id)
+  const [path, labelX, labelY] = getBezierPath({
+    sourceX,
+    sourceY,
+    targetX,
+    targetY,
+    sourcePosition,
+    targetPosition,
+  })
+  if (edge === undefined) return (
+    <BaseEdge
+      id={id}
+      path={path}
+      {...(markerEnd === undefined ? {} : { markerEnd })}
+      {...(style === undefined ? {} : { style })}
+    />
   )
-}
+  const Renderer = workspace.renderers.resolveEdge(edge.type, edge.kindVersion)
+  const actions = {
+    update: (changes: Parameters<ComicCanvasWorkspace['updateV2Edge']>[1]) => workspace.updateV2Edge(id, changes),
+    remove: () => workspace.removeV2Edge(id),
+    select: (next = true) => {
+      const current = workspace.getSnapshot().selection
+      workspace.setSelection({
+        nodeIds: current.nodeIds,
+        edgeIds: next ? [...new Set([...current.edgeIds, id])] : current.edgeIds.filter(edgeId => edgeId !== id),
+      })
+    },
+    focus: () => { workspace.setSelection({ nodeIds: [], edgeIds: [id] }) },
+  }
+  return (
+    <>
+      <BaseEdge
+        id={id}
+        path={path}
+        {...(markerEnd === undefined ? {} : { markerEnd })}
+        {...(style === undefined ? {} : { style })}
+      />
+      <g transform={`translate(${String(labelX)} ${String(labelY)})`} data-canvas-edge-selected={selected === true || undefined}>
+        <Renderer sessionId={workspace.sessionId} edge={edge} selected={selected === true} actions={actions} />
+      </g>
+    </>
+  )
+})
 
 const NODE_TYPES = { canvas: CanvasNodeCard } satisfies NodeTypes
+const EDGE_TYPES = { canvas: CanvasEdgeLine } satisfies EdgeTypes
 const MULTI_SELECTION_KEYS: string[] = ['Meta', 'Control']
 const SNAP_GRID: [number, number] = [8, 8]
 
@@ -275,10 +355,10 @@ function minimapNodeColor(node: Node): string {
   return kind === 'note' ? '#a9c947' : '#5b8ff5'
 }
 
-function toFlowNodes(snapshot: CanvasWorkspaceSnapshot, workspace: CanvasWorkspace): CanvasFlowNode[] {
+function toFlowNodes(snapshot: ComicCanvasWorkspaceSnapshot, workspace: ComicCanvasWorkspace): CanvasFlowNode[] {
   const selected = new Set(snapshot.selection.nodeIds)
   const resizeVisible = snapshot.selection.nodeIds.length === 1
-  return snapshot.document.nodes.filter(node => node.kind !== 'video').map((node) => {
+  return snapshot.document.nodes.map((node) => {
     const previewUrl = workspace.getMediaPreviewUrl(node.id)
     return {
       id: node.id,
@@ -296,12 +376,13 @@ function toFlowNodes(snapshot: CanvasWorkspaceSnapshot, workspace: CanvasWorkspa
   })
 }
 
-function toFlowEdges(snapshot: CanvasWorkspaceSnapshot): CanvasFlowEdge[] {
+function toFlowEdges(snapshot: ComicCanvasWorkspaceSnapshot): CanvasFlowEdge[] {
   const selected = new Set(snapshot.selection.edgeIds)
-  const visible = new Set(snapshot.document.nodes.filter(node => node.kind !== 'video').map(node => node.id))
-  return snapshot.document.edges.filter(edge => visible.has(edge.source) && visible.has(edge.target)).map((edge) => ({
+  return snapshot.document.edges.map((edge) => ({
     id: edge.id,
+    type: 'canvas' as const,
     source: edge.source,
+    data: { domainId: edge.id },
     target: edge.target,
     ...(edge.sourceHandle === undefined ? {} : { sourceHandle: edge.sourceHandle }),
     ...(edge.targetHandle === undefined ? {} : { targetHandle: edge.targetHandle }),
@@ -318,7 +399,7 @@ function isEditableTarget(target: EventTarget | null): boolean {
     && (target.isContentEditable || target.matches('input, textarea, select'))
 }
 
-function createInputFromDrop(payload: CanvasDropPayloadV1, position: CanvasPointV1): Parameters<CanvasWorkspace['createNode']>[0] {
+function createInputFromDrop(payload: ComicCanvasDropPayload, position: ComicCanvasPoint): Parameters<ComicCanvasWorkspace['createNode']>[0] {
   if (payload.kind === 'note') {
     return { kind: payload.kind, position, title: payload.title, text: payload.text }
   }
@@ -336,14 +417,14 @@ function createInputFromDrop(payload: CanvasDropPayloadV1, position: CanvasPoint
 
 function isSupportedDrop(dataTransfer: DataTransfer): boolean {
   const types = Array.from(dataTransfer.types)
-  return types.includes('Files') || types.includes(CANVAS_DROP_MIME_V1)
+  return types.includes('Files') || types.includes(CANVAS_DROP_MIME)
 }
 
 export interface CanvasViewProps {
-  readonly workspace: CanvasWorkspace
+  readonly workspace: ComicCanvasWorkspace
 }
 
-/** Canvas center surface backed by the Client projection of ctx.canvas. */
+/** Canvas center surface backed by the V2 ctx.canvasClient projection. */
 export function CanvasView({ workspace }: CanvasViewProps): ReactElement {
   const snapshot = useWorkspaceSnapshot(workspace)
   return (
@@ -356,8 +437,8 @@ export function CanvasView({ workspace }: CanvasViewProps): ReactElement {
 }
 
 function CanvasSurface({ workspace, snapshot }: {
-  readonly workspace: CanvasWorkspace
-  readonly snapshot: CanvasWorkspaceSnapshot
+  readonly workspace: ComicCanvasWorkspace
+  readonly snapshot: ComicCanvasWorkspaceSnapshot
 }): ReactElement {
   const stageRef = useRef<HTMLDivElement>(null)
   const flowRef = useRef<ReactFlowInstance<CanvasFlowNode, CanvasFlowEdge> | null>(null)
@@ -392,7 +473,7 @@ function CanvasSurface({ workspace, snapshot }: {
     }
   }, [reportError])
 
-  const centerPosition = useCallback((): CanvasPointV1 => {
+  const centerPosition = useCallback((): ComicCanvasPoint => {
     const rect = stageRef.current?.getBoundingClientRect()
     const instance = flowRef.current
     if (rect === undefined || instance === null) return { x: 80, y: 80 }
@@ -444,7 +525,7 @@ function CanvasSurface({ workspace, snapshot }: {
 
   const tidyCanvas = useCallback((direction = layoutDirection): void => {
     run(() => {
-      workspace.moveNodes(tidyCanvasNodes(snapshot.document.nodes.filter(node => node.kind !== 'video'), direction))
+      workspace.moveNodes(tidyCanvasNodes(snapshot.document.nodes, direction))
       window.requestAnimationFrame(fitCanvas)
     })
   }, [fitCanvas, layoutDirection, run, snapshot.document.nodes, workspace])
@@ -457,7 +538,7 @@ function CanvasSurface({ workspace, snapshot }: {
     else if (command === 'zoom-out') zoomOut()
     else if (command === 'clear-selection') workspace.setSelection({ nodeIds: [], edgeIds: [] })
     else if (command === 'select-all') workspace.setSelection({
-      nodeIds: snapshot.document.nodes.filter(node => node.kind !== 'video').map(node => node.id),
+      nodeIds: snapshot.document.nodes.map(node => node.id),
       edgeIds: [],
     })
     else if (command === 'undo') workspace.undo()
@@ -577,7 +658,7 @@ function CanvasSurface({ workspace, snapshot }: {
       if (event.dataTransfer.types.includes('Files') && event.dataTransfer.files.length > 0) {
         ids = await workspace.addDroppedFiles(event.dataTransfer.files, position)
       } else {
-        const raw = event.dataTransfer.getData(CANVAS_DROP_MIME_V1)
+        const raw = event.dataTransfer.getData(CANVAS_DROP_MIME)
         const payload = parseCanvasDropPayload(raw)
         ids = [workspace.createNode(createInputFromDrop(payload, position))]
       }
@@ -600,7 +681,7 @@ function CanvasSurface({ workspace, snapshot }: {
           <span className="cvxCanvasBrandMark"><CanvasIcon size={17} /></span>
           <span className="cvxCanvasBrandCopy">
             <strong>{snapshot.document.title}</strong>
-            <span>Canvas document · v{snapshot.document.version}</span>
+            <span>Canvas document · V2</span>
           </span>
         </div>
       </header>
@@ -646,6 +727,7 @@ function CanvasSurface({ workspace, snapshot }: {
             nodes={nodes}
             edges={edgesHidden ? [] : edges}
             nodeTypes={NODE_TYPES}
+            edgeTypes={EDGE_TYPES}
             viewport={snapshot.document.viewport}
             minZoom={0.08}
             maxZoom={4}

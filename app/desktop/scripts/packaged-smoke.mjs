@@ -8,6 +8,7 @@ import {
   readFileSync,
   realpathSync,
   rmSync,
+  statSync,
   symlinkSync,
   writeFileSync,
 } from 'node:fs'
@@ -176,6 +177,7 @@ terminal.onExit(event => {
     env: {
       CONVAX_CONTROL_TOKEN: token,
       CONVAX_PROFILE: 'default',
+      CONVAX_PROJECTS_HOME: productData,
       DSH_HOME: harnessHome,
       DSH_TELEMETRY_DISABLED: '1',
       HOME: isolatedHome,
@@ -222,12 +224,49 @@ terminal.onExit(event => {
     throw new Error(`packaged Agent preset policy failed: ${JSON.stringify(presetEnvelope)}`)
   }
 
+  const canvasRpcId = 'convax-packaged-canvas-v2-smoke'
+  const canvas = await fetch(`${origin.origin}/api/canvasV2/getProject`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'x-convax-control-token': token,
+    },
+    body: JSON.stringify({
+      type: 'client-request',
+      rpcId: canvasRpcId,
+      method: 'canvasV2/getProject',
+      payload: {
+        args: {
+          request: {
+            workspaceId: 'workspace:default',
+            projectId: 'project:default',
+          },
+        },
+      },
+    }),
+  })
+  const canvasEnvelope = await canvas.json()
+  const canvasProject = canvasEnvelope?.result?.value
+  if (canvas.status !== 200
+    || canvasEnvelope?.rpcId !== canvasRpcId
+    || canvasEnvelope?.result?.ok !== true
+    || canvasProject?.schemaVersion !== 2
+    || canvasProject?.workspaceId !== 'workspace:default'
+    || canvasProject?.id !== 'project:default'
+    || canvasProject?.activeCanvasId !== 'canvas:main') {
+    throw new Error(`packaged Canvas V2 Remote failed: ${JSON.stringify(canvasEnvelope)}`)
+  }
+
   child.kill('SIGTERM')
   await waitForExit()
   if (readFileSync(join(productData, 'sentinel'), 'utf8') !== 'product-owned\n') {
     throw new Error('packaged runtime changed product-owned data')
   }
-  process.stdout.write('packaged smoke: isolated Node/DSH closure, PTY, safe Agent presets, auth fence, and data boundary pass\n')
+  const canvasDatabase = join(productData, 'default', '.stores', 'sqlite', 'canvas', 'canvas.sqlite3')
+  if ((statSync(canvasDatabase).mode & 0o777) !== 0o600) {
+    throw new Error('packaged Canvas database permissions are not 0600')
+  }
+  process.stdout.write('packaged smoke: isolated Node/DSH closure, PTY, safe Agent presets, auth fence, Canvas V2 Remote, SQLite authority, and data boundary pass\n')
 } finally {
   if (child !== undefined && child.exitCode === null && child.signalCode === null) {
     child.kill('SIGKILL')
