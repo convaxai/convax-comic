@@ -1,14 +1,11 @@
 import { CANVAS_SCHEMA_VERSION, type CanvasDocument, type CanvasProject } from '@convax/canvas-api'
 import { describe, expect, it, vi } from 'vitest'
 import {
-  CanvasProjectBrowser,
-  CanvasWorkbench,
-  NewSessionAction,
-  WorkbenchAgentPanel,
+  CanvasCenter,
+  CanvasProjectCanvases,
 } from '../src/client/Workbench.tsx'
-import { apply } from '../src/client/index.ts'
+import { apply, inject as requiredServices } from '../src/client/index.ts'
 import type { ComicCanvasWorkspace } from '../src/client/comic-workspace-v2.ts'
-import type { WorkbenchLayout } from '../src/client/layout.ts'
 
 interface Registration {
   readonly options: {
@@ -27,7 +24,7 @@ const document: CanvasDocument = {
   schemaVersion: CANVAS_SCHEMA_VERSION,
   revision: 0,
   id: 'canvas:main',
-  workspaceId: 'workspace:default',
+  workspaceId: 'workspace:test',
   createdAt: timestamp,
   updatedAt: timestamp,
   metadata: { title: 'Test canvas' },
@@ -38,8 +35,8 @@ const document: CanvasDocument = {
 const project: CanvasProject = {
   schemaVersion: CANVAS_SCHEMA_VERSION,
   revision: 0,
-  id: 'project:default',
-  workspaceId: 'workspace:default',
+  id: 'project:root',
+  workspaceId: 'workspace:test',
   createdAt: timestamp,
   updatedAt: timestamp,
   metadata: { title: 'Test canvas' },
@@ -52,10 +49,23 @@ function success<T>(value: T) {
 }
 
 describe('Canvas V2 Client plugin', () => {
-  it('mounts strict V2 Remote, provides canvasClient, and preserves recursive panel slots', async () => {
+  it('activates before a project scope exists and waits in a child injection', async () => {
+    const disposeRemote = vi.fn()
+    const injectScope = vi.fn()
+    const dispose = await apply({
+      remote: { $mount: vi.fn(async () => disposeRemote), canvasV2: {} },
+      inject: injectScope,
+    } as never)
+
+    expect(requiredServices).toEqual(['slots', 'remote'])
+    expect(injectScope).toHaveBeenCalledWith(['remote.canvasV2', 'comicProject'], expect.any(Function))
+    await dispose()
+    expect(disposeRemote).toHaveBeenCalledOnce()
+  })
+
+  it('mounts as project-scoped center and canvas-list contributions', async () => {
     const registrations: Registration[] = []
-    const pending = new Map<string, Array<() => unknown>>()
-    const declarations = new Set(['sidebar.workspaces'])
+    const declarations = new Set(['workbench.center', 'project.canvases'])
     const injectionDisposers: Array<ReturnType<typeof vi.fn>> = []
     const provided = new Map<string, unknown>()
     const providerDisposers = new Map<string, ReturnType<typeof vi.fn>>()
@@ -71,6 +81,7 @@ describe('Canvas V2 Client plugin', () => {
       $mount: vi.fn(async () => disposeRemote),
       canvasV2: {
         getProject: vi.fn(async () => success(structuredClone(project))),
+        createProject: vi.fn(),
         getDocument: vi.fn(async () => success(structuredClone(document))),
         applyPatch: vi.fn(),
         waitForRevision,
@@ -80,14 +91,15 @@ describe('Canvas V2 Client plugin', () => {
     }
     const ctx = {
       remote,
-      workspaces: {
-        list: {
-          getSnapshot: () => ({
-            items: [{ workspaceId: 'workspace:test' }],
-            recentWorkspaceId: 'workspace:test',
-          }),
-        },
-        startSession: vi.fn(),
+      comicProject: {
+        workspaceId: 'workspace:test',
+        projectId: 'project:root',
+      },
+      provide(name: string, service: unknown): ReturnType<typeof vi.fn> {
+        provided.set(name, service)
+        const dispose = vi.fn(() => { provided.delete(name) })
+        providerDisposers.set(name, dispose)
+        return dispose
       },
       reflect: {
         provide(name: string, service: unknown): ReturnType<typeof vi.fn> {
@@ -98,16 +110,14 @@ describe('Canvas V2 Client plugin', () => {
         },
       },
       async inject(names: readonly string[], callback: (inner: unknown) => Promise<() => Promise<void>>): Promise<void> {
-        expect(names).toEqual(['remote.canvasV2'])
+        expect(names).toEqual(['remote.canvasV2', 'comicProject'])
         injectedReady = callback(ctx).then((cleanup) => { injectedCleanup = cleanup })
         await injectedReady
       },
       slots: {
         inject(name: string, callback: () => unknown): () => void {
-          let cleanup: unknown
-          const run = (): void => { cleanup = callback() }
-          if (declarations.has(name)) run()
-          else pending.set(name, [...(pending.get(name) ?? []), run])
+          expect(declarations.has(name)).toBe(true)
+          const cleanup = callback()
           const dispose = vi.fn(() => { if (typeof cleanup === 'function') cleanup() })
           injectionDisposers.push(dispose)
           return dispose
@@ -115,11 +125,6 @@ describe('Canvas V2 Client plugin', () => {
         register(options: Registration['options'], component: unknown): () => void {
           const dispose = vi.fn()
           registrations.push({ options, component, dispose })
-          for (const name of Object.keys(options.children ?? {})) {
-            declarations.add(name)
-            for (const activate of pending.get(name) ?? []) activate()
-            pending.delete(name)
-          }
           return dispose
         },
       },
@@ -130,44 +135,26 @@ describe('Canvas V2 Client plugin', () => {
     expect(remote.$mount).toHaveBeenCalledOnce()
     expect(waitForRevision).toHaveBeenCalledOnce()
     expect(provided.has('canvasClient')).toBe(true)
-    expect(registrations).toHaveLength(4)
-    expect(registrations[0]?.options).toMatchObject({
-      name: 'root',
-      children: {
-        sidebar: { kind: 'single', scope: 'root' },
-        'workbench.agent': { kind: 'single', scope: 'root' },
-        'shell.overlay': { kind: 'list', scope: 'root' },
-      },
-    })
-    expect(registrations[0]?.component).toBe(CanvasWorkbench)
-    expect(registrations[1]?.component).toBe(CanvasProjectBrowser)
-    expect(registrations[2]?.component).toBe(WorkbenchAgentPanel)
-    expect(registrations[3]?.options).toMatchObject({
-      name: 'workbench.agent.header.action',
-      id: 'app-canvas-new-session',
-      order: 100,
-    })
-    expect(registrations[3]?.component).toBe(NewSessionAction)
+    expect(registrations).toHaveLength(2)
+    expect(registrations[0]?.options.name).toBe('workbench.center')
+    expect(registrations[0]?.component).toBe(CanvasCenter)
+    expect(registrations[1]?.options.name).toBe('project.canvases')
+    expect(registrations[1]?.component).toBe(CanvasProjectCanvases)
 
     const workspace = registrations[0]?.options.inject?.().workspace as ComicCanvasWorkspace
-    const layout = registrations[0]?.options.inject?.().layout as WorkbenchLayout
-    const browserWorkspace = registrations[1]?.options.inject?.().workspace as ComicCanvasWorkspace
-    const browserProject = registrations[1]?.options.inject?.().project as { getSnapshot(): { activeCanvasId: string } }
-    const startSession = registrations[3]?.options.inject?.().startSession as () => void
+    const browserProps = registrations[1]?.options.inject?.() as Record<string, unknown>
+    const browserWorkspace = browserProps.workspace as ComicCanvasWorkspace
+    const browserProject = browserProps.canvasProject as { getSnapshot(): { activeCanvasId: string } }
+    expect(browserProps).not.toHaveProperty('project')
     expect(workspace.getSnapshot().document.title).toBe('Test canvas')
     expect(browserWorkspace).toBe(workspace)
     expect(browserProject.getSnapshot().activeCanvasId).toBe('canvas:main')
-    layout.openDetails()
-    expect(layout.getSnapshot().detailsOpen).toBe(true)
-    startSession()
-    expect(ctx.workspaces.startSession).toHaveBeenCalledWith('workspace:test')
 
     await injectedCleanup?.()
     await dispose()
     for (const registration of registrations) expect(registration.dispose).toHaveBeenCalledOnce()
     for (const injectionDispose of injectionDisposers) expect(injectionDispose).toHaveBeenCalledOnce()
     expect(providerDisposers.get('canvasClient')).toHaveBeenCalledOnce()
-    expect(providerDisposers.get('layout')).toHaveBeenCalledOnce()
     expect(disposeRemote).toHaveBeenCalledOnce()
     expect(() => { workspace.openCanvas() }).toThrow('ComicCanvasWorkspace has been disposed')
   })

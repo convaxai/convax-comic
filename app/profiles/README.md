@@ -5,12 +5,13 @@
   destructive shell commands, and mounts the private desktop Host service
   because those are mandatory product boundaries.
 - `default` adds `appRuntime`, its lifecycle consumer, the Convax Comic browser
-  brand plugin, and the Canvas Host/Client plugin. Canvas owns the documented
-  `root` slot and provides the compatible Client `layout` service, but panel
-  contents remain slot contributions. The official DSH `ui-sidebar` shell stays
-  enabled while `ui-workspace` is released for Canvas to occupy
-  `sidebar.workspaces`; the right `workbench.agent` occupant declares the official
-  `conversation` and `details` child slots plus an additive header-action seat.
+  brand plugin, and project/Canvas Host+Client plugins. `@convax/project` owns the
+  documented `root` and `sidebar.workspaces` seats, exposes the active Workspace
+  as a project-scoped Cordis service, and hosts the top project switcher plus live
+  file tree. Canvas consumes that service and contributes only the center surface
+  and the nested canvas navigator. The official DSH `ui-sidebar` shell stays
+  enabled; the right `workbench.agent` occupant still declares the official
+  `conversation` and `details` children plus an additive header-action seat.
   `compatibility` remains untouched.
 - `default` also mounts the exactly pinned `dsh-codex-connect` provider under
   its canonical `llm-openai-codex` row. It does not replace the DeepSeek default

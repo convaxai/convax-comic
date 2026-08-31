@@ -10,15 +10,23 @@ import * as SqliteRuntime from '@convax/sqlite-runtime'
 
 const FIBER_PENDING = 0
 const FIBER_ACTIVE = 2
-const SCOPE = { workspaceId: 'workspace:default', projectId: 'project:default', canvasId: 'canvas:main' }
+const SCOPE = { workspaceId: 'workspace:bound', projectId: 'project:root', canvasId: 'canvas:main' }
 
 describe('Canvas V2 provider lifecycle', () => {
   it('reactivates sqliteRuntime -> canvasStore -> canvasHost -> builtins and retains V2 data', async () => {
     const dataDir = mkdtempSync(join(tmpdir(), 'convax-canvas-provider-'))
     const ctx = new Context()
-    ctx.provide('tools', { register: () => () => {} } as never)
+    const tools = new Map<string, { execute(args: unknown, execution: unknown): Promise<unknown> }>()
+    ctx.provide('tools', {
+      register: (definition: { name: string; execute(args: unknown, execution: unknown): Promise<unknown> }) => {
+        tools.set(definition.name, definition)
+        return () => { tools.delete(definition.name) }
+      },
+    } as never)
     const registerTypert = vi.fn((_contribution: unknown) => () => {})
     ctx.provide('typert', { register: registerTypert } as never)
+    const resolveByPath = vi.fn(async (path: string) => path === dataDir ? { id: 'workspace:bound' } : undefined)
+    ctx.provide('workspaceRegistry', { resolveByPath } as never)
 
     try {
       const canvasFiber = ctx.plugin(Canvas)
@@ -37,6 +45,21 @@ describe('Canvas V2 provider lifecycle', () => {
       expect(builtinsFiber.state).toBe(FIBER_ACTIVE)
       expect(registerTypert).toHaveBeenCalledTimes(1)
       expect(registerTypert.mock.calls[0]?.[0]).toBe(Canvas.CANVAS_HOST_TYPERT_V2_CONTRIBUTION)
+
+      const listTool = tools.get('canvas_list')
+      if (listTool === undefined) throw new Error('canvas_list was not registered')
+      await expect(listTool.execute({}, {
+        signal: new AbortController().signal,
+      })).rejects.toThrow('require an Agent session')
+      await expect(listTool.execute({}, {
+        agent: { session: { header: { cwd: dataDir } } },
+        signal: new AbortController().signal,
+      })).resolves.toMatchObject({ activeCanvasId: 'canvas:main' })
+      expect(resolveByPath).toHaveBeenCalledWith(dataDir)
+      await expect(ctx.canvasHost.projects.get({
+        workspaceId: 'workspace:bound',
+        projectId: 'project:root',
+      })).resolves.toMatchObject({ activeCanvasId: 'canvas:main' })
 
       await ctx.canvasHost.nodes.create({
         ...SCOPE,
@@ -70,6 +93,12 @@ describe('Canvas V2 provider lifecycle', () => {
       await canvasFiber
       await builtinsFiber
       expect(registerTypert).toHaveBeenCalledTimes(2)
+      const restoredListTool = tools.get('canvas_list')
+      if (restoredListTool === undefined) throw new Error('canvas_list was not restored')
+      await expect(restoredListTool.execute({}, {
+        agent: { session: { header: { cwd: dataDir } } },
+        signal: new AbortController().signal,
+      })).resolves.toMatchObject({ activeCanvasId: 'canvas:main' })
       expect(await ctx.canvasHost.documents.get(SCOPE)).toMatchObject({
         revision: 1,
         nodes: {

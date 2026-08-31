@@ -497,6 +497,25 @@ __metadata:
   languageName: unknown
   linkType: soft
 
+"@convax/beui@workspace:*, @convax/beui@workspace:app/packages/beui":
+  version: 0.0.0-use.local
+  resolution: "@convax/beui@workspace:app/packages/beui"
+  dependencies:
+    "@types/react": "npm:^18.3.1"
+    "@types/react-dom": "npm:^18.3.0"
+    lucide-react: "npm:1.16.0"
+    motion: "npm:11.18.2"
+    react: "npm:18.3.1"
+    react-dom: "npm:18.3.1"
+    tsdown: "npm:0.22.2"
+    typescript: "npm:6.0.3"
+    vitest: "npm:4.1.8"
+  peerDependencies:
+    react: 18.3.1
+    react-dom: 18.3.1
+  languageName: unknown
+  linkType: soft
+
 "@convax/canvas-api@workspace:*, @convax/canvas-api@workspace:app/plugins/canvas-api":
   version: 0.0.0-use.local
   resolution: "@convax/canvas-api@workspace:app/plugins/canvas-api"
@@ -560,6 +579,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@convax/canvas@workspace:app/plugins/canvas"
   dependencies:
+    "@convax/beui": "workspace:*"
     "@types/node": "npm:^22.20.0"
     "@types/react": "npm:^18.3.1"
     "@types/react-dom": "npm:^18.3.0"
@@ -574,6 +594,7 @@ __metadata:
     "@convax/canvas-api": "workspace:*"
     "@convax/canvas-builtins": "workspace:*"
     "@convax/canvas-store-api": "workspace:*"
+    "@convax/project": "workspace:*"
     "@deepseek-ai/cordis": 4.0.1
     "@deepseek-ai/dsh-api-remotes": 0.1.1-rc.2
     "@deepseek-ai/dsh-client-runtime": 0.1.1-rc.2
@@ -613,6 +634,7 @@ __metadata:
     "@convax/canvas-store-api": "workspace:*"
     "@convax/canvas-store-sqlite": "workspace:*"
     "@convax/command-guard": "workspace:*"
+    "@convax/project": "workspace:*"
     "@convax/runtime": "workspace:*"
     "@convax/sqlite-runtime": "workspace:*"
     "@convax/test-consumer": "workspace:*"
@@ -723,6 +745,7 @@ __metadata:
     "@deepseek-ai/dsh-web": "npm:0.1.1-rc.2"
     "@deepseek-ai/dsh-web-app": "npm:0.1.1-rc.2"
     "@deepseek-ai/dsh-workflow": "npm:0.1.1-rc.2"
+    "@deepseek-ai/dsh-workspace": "npm:0.1.1-rc.2"
     "@deepseek-ai/schemastery": "npm:3.18.1"
     "@earendil-works/pi-ai": "npm:0.82.1"
     "@types/node": "npm:^22.20.0"
@@ -739,6 +762,45 @@ __metadata:
     yaml: "npm:2.9.0"
   bin:
     convax-desktop: lib/bin.js
+  languageName: unknown
+  linkType: soft
+
+"@convax/project@workspace:*, @convax/project@workspace:app/plugins/project":
+  version: 0.0.0-use.local
+  resolution: "@convax/project@workspace:app/plugins/project"
+  dependencies:
+    "@convax/beui": "workspace:*"
+    "@types/node": "npm:^22.20.0"
+    "@types/react": "npm:^18.3.1"
+    "@types/react-dom": "npm:^18.3.0"
+    chokidar: "npm:5.0.0"
+    react: "npm:18.3.1"
+    react-dom: "npm:18.3.1"
+    tsdown: "npm:0.22.2"
+    typescript: "npm:6.0.3"
+    vitest: "npm:4.1.8"
+    zod: "npm:^4.4.3"
+  peerDependencies:
+    "@deepseek-ai/cordis": 4.0.1
+    "@deepseek-ai/dsh-api-remotes": 0.1.1-rc.2
+    "@deepseek-ai/dsh-client-runtime": 0.1.1-rc.2
+    "@deepseek-ai/dsh-client-ui-slots": 0.1.1-rc.2
+    "@deepseek-ai/dsh-fs": 0.1.1-rc.2
+    "@deepseek-ai/dsh-typert-protocol": 0.1.1-rc.2
+    "@deepseek-ai/dsh-workspace": 0.1.1-rc.2
+    react: 18.3.1
+    react-dom: 18.3.1
+  peerDependenciesMeta:
+    "@deepseek-ai/dsh-api-remotes":
+      optional: true
+    "@deepseek-ai/dsh-client-runtime":
+      optional: true
+    "@deepseek-ai/dsh-client-ui-slots":
+      optional: true
+    "@deepseek-ai/dsh-fs":
+      optional: true
+    "@deepseek-ai/dsh-workspace":
+      optional: true
   languageName: unknown
   linkType: soft
 
@@ -786,6 +848,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@convax/ui@workspace:app/plugins/ui"
   dependencies:
+    "@convax/beui": "workspace:*"
     "@types/node": "npm:^22.20.0"
     "@types/react": "npm:^18.3.1"
     react: "npm:18.3.1"
@@ -797,6 +860,7 @@ __metadata:
     "@deepseek-ai/dsh-client-runtime": 0.1.1-rc.2
     "@deepseek-ai/dsh-client-ui-conversation": 0.1.1-rc.2
     "@deepseek-ai/dsh-client-ui-sidebar": 0.1.1-rc.2
+    "@deepseek-ai/dsh-client-ui-theme": 0.1.1-rc.2
     react: 18.3.1
   languageName: unknown
   linkType: soft
@@ -4026,7 +4090,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@deepseek-ai/dsh-workspace@npm:^0.1.1-rc.2":
+"@deepseek-ai/dsh-workspace@npm:0.1.1-rc.2, @deepseek-ai/dsh-workspace@npm:^0.1.1-rc.2":
   version: 0.1.1-rc.2
   resolution: "@deepseek-ai/dsh-workspace@npm:0.1.1-rc.2"
   dependencies:
@@ -6611,21 +6675,21 @@ __metadata:
   languageName: node
   linkType: hard
 
+"chokidar@npm:5.0.0, chokidar@npm:^5.0.0":
+  version: 5.0.0
+  resolution: "chokidar@npm:5.0.0"
+  dependencies:
+    readdirp: "npm:^5.0.0"
+  checksum: 10c0/42fc907cb2a7ff5c9e220f84dae75380a77997f851c2a5e7865a2cf9ae45dd407a23557208cdcdbf3ac8c93341135a1748e4c48c31855f3bfa095e5159b6bdec
+  languageName: node
+  linkType: hard
+
 "chokidar@npm:^4.0.3":
   version: 4.0.3
   resolution: "chokidar@npm:4.0.3"
   dependencies:
     readdirp: "npm:^4.0.1"
   checksum: 10c0/a58b9df05bb452f7d105d9e7229ac82fa873741c0c40ddcc7bb82f8a909fbe3f7814c9ebe9bc9a2bef9b737c0ec6e2d699d179048ef06ad3ec46315df0ebe6ad
-  languageName: node
-  linkType: hard
-
-"chokidar@npm:^5.0.0":
-  version: 5.0.0
-  resolution: "chokidar@npm:5.0.0"
-  dependencies:
-    readdirp: "npm:^5.0.0"
-  checksum: 10c0/42fc907cb2a7ff5c9e220f84dae75380a77997f851c2a5e7865a2cf9ae45dd407a23557208cdcdbf3ac8c93341135a1748e4c48c31855f3bfa095e5159b6bdec
   languageName: node
   linkType: hard
 
@@ -6787,6 +6851,7 @@ __metadata:
     "@convax/canvas-builtins": "workspace:*"
     "@convax/canvas-store-api": "workspace:*"
     "@convax/canvas-store-sqlite": "workspace:*"
+    "@convax/project": "workspace:*"
     "@convax/runtime": "workspace:*"
     "@convax/sqlite-runtime": "workspace:*"
     "@deepseek-ai/cordis": "npm:4.0.1"
@@ -7613,6 +7678,28 @@ __metadata:
   version: 0.2.0
   resolution: "forwarded@npm:0.2.0"
   checksum: 10c0/9b67c3fac86acdbc9ae47ba1ddd5f2f81526fa4c8226863ede5600a3f7c7416ef451f6f1e240a3cc32d0fd79fcfe6beb08fd0da454f360032bde70bf80afbb33
+  languageName: node
+  linkType: hard
+
+"framer-motion@npm:^11.18.2":
+  version: 11.18.2
+  resolution: "framer-motion@npm:11.18.2"
+  dependencies:
+    motion-dom: "npm:^11.18.1"
+    motion-utils: "npm:^11.18.1"
+    tslib: "npm:^2.4.0"
+  peerDependencies:
+    "@emotion/is-prop-valid": "*"
+    react: ^18.0.0 || ^19.0.0
+    react-dom: ^18.0.0 || ^19.0.0
+  peerDependenciesMeta:
+    "@emotion/is-prop-valid":
+      optional: true
+    react:
+      optional: true
+    react-dom:
+      optional: true
+  checksum: 10c0/41b1ef1b4e54ea13adaf01d61812a8783d2352f74641c91b50519775704bc6274db6b6863ff494a1f705fa6c6ed8f4df3497292327c906d53ea0129cef3ec361
   languageName: node
   linkType: hard
 
@@ -8598,6 +8685,15 @@ __metadata:
   languageName: node
   linkType: hard
 
+"lucide-react@npm:1.16.0":
+  version: 1.16.0
+  resolution: "lucide-react@npm:1.16.0"
+  peerDependencies:
+    react: ^16.5.1 || ^17.0.0 || ^18.0.0 || ^19.0.0
+  checksum: 10c0/d1c4b7f1abdc8b5c729a5bd74d875f0b0db732b2e8d0cc8c76f9e167818b81a6b246a64986ab2fc1ae74cf9f8d16ce2cefe98fe5a6420b31f4fd6742b3181d5a
+  languageName: node
+  linkType: hard
+
 "magic-string@npm:^0.30.21":
   version: 0.30.21
   resolution: "magic-string@npm:0.30.21"
@@ -9276,6 +9372,43 @@ __metadata:
   dependencies:
     minipass: "npm:^7.1.2"
   checksum: 10c0/5aad75ab0090b8266069c9aabe582c021ae53eb33c6c691054a13a45db3b4f91a7fb1bd79151e6b4e9e9a86727b522527c0a06ec7d45206b745d54cd3097bcec
+  languageName: node
+  linkType: hard
+
+"motion-dom@npm:^11.18.1":
+  version: 11.18.1
+  resolution: "motion-dom@npm:11.18.1"
+  dependencies:
+    motion-utils: "npm:^11.18.1"
+  checksum: 10c0/98378bdf9d77870829cdf3624c5eff02e48cfa820dfc74450364d7421884700048d60e277bfbf477df33270fbae4c1980e5914586f5b6dff28d4921fdca8ac47
+  languageName: node
+  linkType: hard
+
+"motion-utils@npm:^11.18.1":
+  version: 11.18.1
+  resolution: "motion-utils@npm:11.18.1"
+  checksum: 10c0/dac083bdeb6e433a277ac4362211b0fdce59ff09d6f7897f0f49d1e3561209c6481f676876daf99a33485054bc7e4b1d1b8d1de16f7b1e5c6f117fe76358ca00
+  languageName: node
+  linkType: hard
+
+"motion@npm:11.18.2":
+  version: 11.18.2
+  resolution: "motion@npm:11.18.2"
+  dependencies:
+    framer-motion: "npm:^11.18.2"
+    tslib: "npm:^2.4.0"
+  peerDependencies:
+    "@emotion/is-prop-valid": "*"
+    react: ^18.0.0 || ^19.0.0
+    react-dom: ^18.0.0 || ^19.0.0
+  peerDependenciesMeta:
+    "@emotion/is-prop-valid":
+      optional: true
+    react:
+      optional: true
+    react-dom:
+      optional: true
+  checksum: 10c0/9d01ac2cc6e90e8c2c67e1133665e49021bed96c9beac770e2907be6f8eb4a7fbbbac4b3180c34222c5dc633c68c64bac9e793fe036103b3657cdfb185fe57b2
   languageName: node
   linkType: hard
 

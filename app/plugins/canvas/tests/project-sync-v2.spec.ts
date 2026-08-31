@@ -242,6 +242,86 @@ describe('CanvasProjectSync V2', () => {
     await coordinator.dispose()
   })
 
+  it('cannot publish a stale service when disposal races project startup', async () => {
+    const remote = new FakeWrappedRemote()
+    const original = remote.api()
+    let release!: () => void
+    const gate = new Promise<void>(resolve => { release = resolve })
+    const getProject = vi.fn(async () => {
+      await gate
+      return { ok: true as const, value: structuredClone(remote.project) }
+    })
+    const coordinator = new CanvasProjectSync(
+      { ...original, getProject } as unknown as CanvasRemoteV2Api,
+      { workspaceId: 'workspace-1', projectId: 'project-1' },
+    )
+
+    const start = coordinator.start()
+    await vi.waitFor(() => expect(getProject).toHaveBeenCalledOnce())
+    const disposal = coordinator.dispose()
+    release()
+    await expect(start).rejects.toThrow('Canvas project sync is disposed')
+    await disposal
+    expect(() => coordinator.workspace).toThrow('not started')
+    expect(remote.waiters.size).toBe(0)
+  })
+
+  it('initializes a missing workspace-bound project when requested', async () => {
+    const remote = new FakeWrappedRemote()
+    const getProject = vi.fn(async () => ({
+      ok: false as const,
+      error: { code: 'REMOTE_ERROR', message: 'Canvas project not found: project-1', details: {} },
+    }))
+    const createProject = vi.fn(async (request: { workspaceId: string; projectId: string }) => ({
+      ok: true as const,
+      value: structuredClone({
+        ...remote.project,
+        workspaceId: request.workspaceId,
+        id: request.projectId,
+      }),
+    }))
+    const api = { ...remote.api(), getProject, createProject } as unknown as CanvasRemoteV2Api
+    const coordinator = new CanvasProjectSync(api, {
+      workspaceId: 'workspace-1',
+      projectId: 'project-1',
+      clientId: 'sync-initialize',
+      revisionWaitMs: 50,
+      ensureProject: { canvasId: 'canvas-a', title: 'Initialized' },
+    })
+
+    await coordinator.start()
+    expect(createProject).toHaveBeenCalledWith(expect.objectContaining({
+      workspaceId: 'workspace-1',
+      projectId: 'project-1',
+      canvasId: 'canvas-a',
+      title: 'Initialized',
+    }))
+    await coordinator.dispose()
+  })
+
+  it('rejects a lazy-create response outside the requested project scope', async () => {
+    const remote = new FakeWrappedRemote()
+    const api = {
+      ...remote.api(),
+      getProject: vi.fn(async () => ({
+        ok: false as const,
+        error: { code: 'PROJECT_NOT_FOUND', message: 'missing project', details: {} },
+      })),
+      createProject: vi.fn(async () => ({
+        ok: true as const,
+        value: structuredClone({ ...remote.project, id: 'project:other' }),
+      })),
+    } as unknown as CanvasRemoteV2Api
+    const coordinator = new CanvasProjectSync(api, {
+      workspaceId: 'workspace-1',
+      projectId: 'project-1',
+      ensureProject: { canvasId: 'canvas-a' },
+    })
+
+    await expect(coordinator.start()).rejects.toThrow('returned a different project')
+    await coordinator.dispose()
+  })
+
   it('forwards optimistic writes and rebinds stable facades across create/select switches', async () => {
     const remote = new FakeWrappedRemote()
     const coordinator = sync(remote)

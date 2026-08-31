@@ -5,7 +5,11 @@ import {
   createCanvasHostService,
   provideCanvasHostService,
 } from './host/canvas-host-service.js'
-import { registerCanvasV2Tools } from './host/v2-tools.js'
+import {
+  registerCanvasV2Tools,
+  type CanvasV2ToolScope,
+  type CanvasV2ToolScopeResolver,
+} from './host/v2-tools.js'
 import { CanvasRemoteV2Service } from './remote-v2.js'
 import { CANVAS_HOST_TYPERT_V2_CONTRIBUTION } from './remote-v2-contract.js'
 
@@ -19,25 +23,59 @@ export {
 } from './remote-v2-contract.js'
 
 export interface CanvasPluginConfig {
-  readonly workspaceId?: string
-  readonly projectId?: string
   readonly canvasId?: string
   readonly title?: string
 }
 
 export const name = 'app-canvas'
-export const inject = ['tools', 'canvasStore', 'typert']
+export const inject = ['tools', 'canvasStore', 'typert', 'workspaceRegistry']
+
+interface CanvasWorkspaceEntity {
+  readonly id: string
+}
+
+interface CanvasWorkspaceRegistry {
+  resolveByPath(path: string): Promise<CanvasWorkspaceEntity | undefined>
+}
 
 interface CanvasTypertRegistry {
   register(contribution: typeof CANVAS_HOST_TYPERT_V2_CONTRIBUTION): () => void
 }
 
-const DEFAULT_SCOPE = Object.freeze({
-  workspaceId: 'workspace:default',
-  projectId: 'project:default',
+const DEFAULT_CANVAS = Object.freeze({
   canvasId: 'canvas:main',
   title: 'Untitled canvas',
 })
+
+const WORKSPACE_PROJECT_ID = 'project:root'
+
+async function ensureCanvasProject(
+  service: ReturnType<typeof createCanvasHostService>,
+  scope: CanvasV2ToolScope,
+  canvasId: string,
+  title: string,
+): Promise<void> {
+  try {
+    await service.projects.get(scope)
+    return
+  } catch (error) {
+    if (!(error instanceof CanvasHostError) || error.code !== 'PROJECT_NOT_FOUND') throw error
+  }
+  try {
+    await service.projects.create({
+      ...scope,
+      canvasId,
+      title,
+      mutationId: `canvas:initialize:${scope.workspaceId}`,
+      source: '@convax/canvas',
+    })
+  } catch (error) {
+    const raced = (error instanceof CanvasStoreError && error.code === 'CONFLICT')
+      || (error instanceof CanvasHostError && error.code === 'PROJECT_ALREADY_EXISTS')
+    if (!raced) throw error
+    await service.projects.get(scope)
+  }
+}
 
 /** Mount the V2 Host authority, its strict Typert projection, and eight Agent tools. */
 export async function apply(ctx: Context, config: CanvasPluginConfig = {}): Promise<void> {
@@ -45,46 +83,44 @@ export async function apply(ctx: Context, config: CanvasPluginConfig = {}): Prom
   if (store === undefined) throw new Error('canvasStore service is required')
   const typert = ctx.get('typert') as CanvasTypertRegistry | undefined
   if (typert === undefined) throw new Error('typert service is required')
+  const workspaceRegistry = ctx.get('workspaceRegistry') as CanvasWorkspaceRegistry | undefined
+  if (workspaceRegistry === undefined) throw new Error('workspaceRegistry service is required')
   const service = createCanvasHostService(ctx, store)
 
-  const scope = {
-    workspaceId: config.workspaceId ?? DEFAULT_SCOPE.workspaceId,
-    projectId: config.projectId ?? DEFAULT_SCOPE.projectId,
-  }
-  try {
-    try {
-      await service.projects.get(scope)
-    } catch (error) {
-      if (!(error instanceof CanvasHostError) || error.code !== 'PROJECT_NOT_FOUND') throw error
-      try {
-        await service.projects.create({
-          ...scope,
-          canvasId: config.canvasId ?? DEFAULT_SCOPE.canvasId,
-          title: config.title ?? DEFAULT_SCOPE.title,
-          mutationId: 'canvas:initialize',
-          source: '@convax/canvas',
-        })
-      } catch (createError) {
-        // A concurrent Host may have initialized the same shared DB row.
-        const raced = (createError instanceof CanvasStoreError && createError.code === 'CONFLICT')
-          || (createError instanceof CanvasHostError && createError.code === 'PROJECT_ALREADY_EXISTS')
-        if (!raced) throw createError
-        await service.projects.get(scope)
-      }
+  const resolveToolScope: CanvasV2ToolScopeResolver = async (execution) => {
+    execution.signal.throwIfAborted()
+    const cwd = execution.agent?.session.header.cwd
+    if (cwd === undefined) {
+      throw new Error('Canvas tools require an Agent session bound to a Convax project workspace')
     }
-  } catch (error) {
-    await service.close()
-    throw error
+    const workspace = await workspaceRegistry.resolveByPath(cwd)
+    execution.signal.throwIfAborted()
+    if (workspace === undefined) {
+      throw new Error(`current Agent session is not bound to a Convax project workspace: ${cwd}`)
+    }
+    const scope = {
+      workspaceId: String(workspace.id),
+      projectId: WORKSPACE_PROJECT_ID,
+    }
+    execution.signal.throwIfAborted()
+    await ensureCanvasProject(
+      service,
+      scope,
+      config.canvasId ?? DEFAULT_CANVAS.canvasId,
+      config.title ?? DEFAULT_CANVAS.title,
+    )
+    execution.signal.throwIfAborted()
+    return scope
   }
 
-  // Publish only a fully initialized authority; bootstrap is intentionally silent.
+  // Publish the store-backed authority before any project is selected or created.
   provideCanvasHostService(ctx, service)
 
   // Register strict Host descriptors before exposing the Remote receiver.
   typert.register(CANVAS_HOST_TYPERT_V2_CONTRIBUTION)
   new CanvasRemoteV2Service(ctx)
   ctx.effect(
-    () => registerCanvasV2Tools(ctx, service, scope),
+    () => registerCanvasV2Tools(ctx, service, resolveToolScope),
     'canvas/v2-agent-tools',
   )
 }

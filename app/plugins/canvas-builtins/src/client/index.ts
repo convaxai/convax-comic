@@ -25,12 +25,16 @@ export interface Config {
 }
 
 export const name = 'app-canvas-builtins/client'
-export const inject = ['canvasClient']
+export const inject: readonly string[] = []
 
 export function ComicNoteRenderer(props: CanvasNodeRendererProps<ComicNoteData>): ReactElement {
   return createElement('textarea', {
     'aria-label': props.node.data.title || 'Note',
+    'data-canvas-node-input': 'note',
+    className: 'cvxCanvasNodeTextInput nodrag nowheel',
+    placeholder: '写下分镜、对白或提示词…',
     value: props.node.data.text,
+    onFocus: () => { props.actions.focus() },
     onChange: (event: ChangeEvent<HTMLTextAreaElement>) => {
       void props.actions.update({ data: { text: event.currentTarget.value } })
     },
@@ -115,10 +119,8 @@ export function registerComicBuiltinRenderers(
 }
 
 export function apply(ctx: Context, config: Config = {}): void {
-  ctx.effect(
-    () => registerComicBuiltinRenderers(ctx.canvasClient.renderers, config.resolveAssetUrl),
-    'canvas-builtins/client-registrations',
-  )
+  ctx.inject(['canvasClient'], (canvasCtx) =>
+    registerComicBuiltinRenderers(canvasCtx.canvasClient.renderers, config.resolveAssetUrl))
 }
 
 function resolveAssetSafely(resolveAssetUrl: ResolveComicAssetUrl | undefined, assetId: string): string | undefined {

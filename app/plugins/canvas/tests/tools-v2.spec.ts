@@ -115,10 +115,13 @@ class FakeToolsRegistry {
     }
   }
 
-  async call<T>(name: string, args: Record<string, unknown> = {}): Promise<T> {
+  async call<T>(
+    name: string,
+    args: Record<string, unknown> = {},
+    execution: ToolRunContext = { signal: new AbortController().signal } as ToolRunContext,
+  ): Promise<T> {
     const definition = this.definitions.get(name)
     if (definition === undefined) throw new Error(`tool not registered: ${name}`)
-    const execution = { signal: new AbortController().signal } as ToolRunContext
     return await definition.execute(args, execution) as T
   }
 }
@@ -156,6 +159,48 @@ async function disposeHarness(value: Harness): Promise<void> {
 }
 
 describe('Canvas V2 Agent tools', () => {
+  it('resolves the project scope independently for every execution', async () => {
+    const host = new CanvasHostService(new MemoryCanvasStore())
+    const disposeBuiltins = registerComicBuiltinTypes(host)
+    await host.projects.create({
+      workspaceId: 'workspace-a', projectId: 'project-root', canvasId: 'canvas-a', title: 'A', ...SETUP_MUTATION,
+    })
+    await host.projects.create({
+      workspaceId: 'workspace-b', projectId: 'project-root', canvasId: 'canvas-b', title: 'B', ...SETUP_MUTATION,
+    })
+    const tools = new FakeToolsRegistry()
+    const scopeByCwd = new Map([
+      ['/projects/a', 'workspace-a'],
+      ['/projects/b', 'workspace-b'],
+    ])
+    const executionFor = (cwd: string): ToolRunContext => ({
+      signal: new AbortController().signal,
+      agent: { session: { header: { cwd } } },
+    }) as unknown as ToolRunContext
+    const disposeTools = registerCanvasV2Tools(
+      { tools } as unknown as Context,
+      host,
+      async (execution) => {
+        const cwd = execution.agent?.session.header.cwd
+        const workspaceId = cwd === undefined ? undefined : scopeByCwd.get(cwd)
+        if (workspaceId === undefined) throw new Error('unbound execution')
+        return { workspaceId, projectId: 'project-root' }
+      },
+    )
+    try {
+      const [first, second] = await Promise.all([
+        tools.call<{ activeCanvasId: string }>('canvas_list', {}, executionFor('/projects/a')),
+        tools.call<{ activeCanvasId: string }>('canvas_list', {}, executionFor('/projects/b')),
+      ])
+      expect(first).toMatchObject({ activeCanvasId: 'canvas-a' })
+      expect(second).toMatchObject({ activeCanvasId: 'canvas-b' })
+    } finally {
+      disposeTools()
+      disposeBuiltins()
+      await host.close()
+    }
+  })
+
   it('registers exactly the eight public names and returns strict V2 project/document map JSON', async () => {
     const value = await harness()
     expect([...value.tools.definitions.keys()].sort()).toEqual(EXPECTED_TOOL_NAMES)

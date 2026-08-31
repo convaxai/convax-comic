@@ -1,4 +1,10 @@
 import {
+  Button,
+  FileTree,
+  FileTreeFile,
+  FileTreeFolder,
+} from '@convax/beui'
+import {
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -14,6 +20,7 @@ import {
   CanvasIcon,
   CanvasStyles,
   CanvasView,
+  ChevronRightIcon,
   KindIcon,
   PlusIcon,
   kindLabel,
@@ -201,6 +208,15 @@ export function CanvasWorkbench({ workspace, layout, renderSlot }: CanvasWorkben
   )
 }
 
+export function CanvasCenter({ workspace }: { readonly workspace: ComicCanvasWorkspace }): ReactElement {
+  return (
+    <>
+      <CanvasStyles />
+      <div className="cvxWorkbenchCanvas"><CanvasView workspace={workspace} /></div>
+    </>
+  )
+}
+
 export interface CanvasProjectBrowserProps {
   readonly workspace: ComicCanvasWorkspace
   readonly project: CanvasProjectSync
@@ -208,7 +224,7 @@ export interface CanvasProjectBrowserProps {
   readonly expandSidebar: () => void
 }
 
-/** Canvas-owned content contribution for the official sidebar.workspaces seat. */
+/** Legacy wrapper retained for compatibility tests; project navigation now owns the outer seat. */
 export function CanvasProjectBrowser({ workspace, project, wide, expandSidebar }: CanvasProjectBrowserProps): ReactElement {
   const snapshot = useWorkspace(workspace)
   const projectSnapshot = useSyncExternalStore(project.subscribe, project.getSnapshot, project.getSnapshot)
@@ -283,6 +299,101 @@ export function CanvasProjectBrowser({ workspace, project, wide, expandSidebar }
         {projectError !== undefined && <p className="cvxTreeError" role="alert">{projectError}</p>}
       </section>
     </nav>
+  )
+}
+
+export interface CanvasProjectCanvasesProps {
+  readonly workspace: ComicCanvasWorkspace
+  readonly canvasProject: CanvasProjectSync
+}
+
+const canvasTreeValue = (canvasId: string): string => `canvas:${canvasId}`
+const canvasNodeTreeValue = (nodeId: string): string => `node:${nodeId}`
+
+/** Canvas-owned collapsible section nested through the project sidebar Slot. */
+export function CanvasProjectCanvases({ workspace, canvasProject }: CanvasProjectCanvasesProps): ReactElement {
+  const snapshot = useWorkspace(workspace)
+  const projectSnapshot = useSyncExternalStore(canvasProject.subscribe, canvasProject.getSnapshot, canvasProject.getSnapshot)
+  const [expanded, setExpanded] = useState(true)
+  const activeFolderId = canvasTreeValue(projectSnapshot.activeCanvasId)
+  const [expandedCanvasIds, setExpandedCanvasIds] = useState<readonly string[]>([activeFolderId])
+  const [projectError, setProjectError] = useState<string>()
+  const selectedNodeId = snapshot.selection.nodeIds[0]
+  const selectedTreeValue = selectedNodeId === undefined ? activeFolderId : canvasNodeTreeValue(selectedNodeId)
+  useEffect(() => {
+    setExpandedCanvasIds(current => current.includes(activeFolderId) ? current : [...current, activeFolderId])
+  }, [activeFolderId])
+  const runProjectAction = (action: () => Promise<unknown>): void => {
+    setProjectError(undefined)
+    void action().catch(error => { setProjectError(error instanceof Error ? error.message : String(error)) })
+  }
+  return (
+    <>
+      <CanvasStyles />
+      <section className="cvxTreeSection cvxCanvasTreeSection" aria-label="Canvases" data-expanded={expanded || undefined}>
+        <header>
+          <button
+            type="button"
+            className="cvxTreeSectionToggle"
+            aria-expanded={expanded}
+            onClick={() => { setExpanded(value => !value) }}
+          >
+            <ChevronRightIcon className="cvxTreeSectionChevron" size={14} />
+            <span>Canvases</span>
+            <small>{projectSnapshot.canvases.length}</small>
+          </button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="cvxTreeAdd"
+            aria-label="New canvas"
+            title="New canvas"
+            onClick={() => { runProjectAction(() => canvasProject.createCanvas()) }}
+          ><PlusIcon size={13} /></Button>
+        </header>
+        {expanded && (
+          <div className="cvxTreeSectionBody">
+            <FileTree
+              ariaLabel="Canvases"
+              className="cvxCanvasFileTree"
+              value={selectedTreeValue}
+              expandedIds={expandedCanvasIds}
+              onExpandedChange={setExpandedCanvasIds}
+              onValueChange={(value) => {
+                if (value.startsWith('canvas:')) {
+                  runProjectAction(() => canvasProject.selectCanvas(value.slice('canvas:'.length)))
+                } else if (value.startsWith('node:')) {
+                  workspace.selectNode(value.slice('node:'.length))
+                }
+              }}
+            >
+              {projectSnapshot.canvases.map(canvas => {
+                const active = canvas.id === projectSnapshot.activeCanvasId
+                return (
+                  <FileTreeFolder
+                    key={canvas.id}
+                    value={canvasTreeValue(canvas.id)}
+                    name={`${canvas.title} · ${canvas.nodeCount}`}
+                    icon={<CanvasIcon size={14} />}
+                    {...(active ? { className: 'cvxCanvasTreeActive' } : {})}
+                  >
+                    {active && snapshot.document.nodes.map(node => (
+                      <FileTreeFile
+                        key={node.id}
+                        value={canvasNodeTreeValue(node.id)}
+                        name={node.title || kindLabel(node.kind)}
+                        icon={<KindIcon kind={node.kind} size={13} />}
+                      />
+                    ))}
+                  </FileTreeFolder>
+                )
+              })}
+            </FileTree>
+            {projectError !== undefined && <p className="cvxTreeError" role="alert">{projectError}</p>}
+          </div>
+        )}
+      </section>
+    </>
   )
 }
 

@@ -27,6 +27,7 @@ export default defineConfig([
     clean: false,
     sourcemap: true,
     deps: {
+      alwaysBundle: ['@convax/beui/styles'],
       neverBundle: [
         'react',
         '@deepseek-ai/cordis',

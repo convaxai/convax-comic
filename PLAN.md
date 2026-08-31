@@ -50,18 +50,21 @@ Electron Renderer（sandbox、无 Node）
 ```text
 app/
   desktop/          Electron bootstrap、监督器与私有 Host 服务
+  packages/
+    beui/            默认 UI 的 source-owned BeUI token、Motion 与共享 React primitives
   plugins/
     agent-presets/  只读安全 Agent roster
     auth-fence/     HTTP / WebSocket token 鉴权
     command-guard/  高风险 shell 命令审批
     runtime/        appRuntime 服务
     test-consumer/  生命周期证明插件
-    ui/             当前最小 Comic 品牌 slot
+    ui/             默认 profile 的 Comic 品牌 slot 与 BeUI 全局主题适配
     canvas-api/     JSON-only V2 contract、leaf Patch 与 Host/Client 扩展接口
     sqlite-runtime/ 通用 owner-scoped SQLite 生命周期、migration 与事务运行时
     canvas-store-api/ Canvas 持久化 provider 契约
     canvas-store-sqlite/ 基于 sqliteRuntime 的默认 CanvasStore provider
-    canvas/         Canvas V2 Host/Client、Typert Remote、Agent tools 与 React Flow UI
+    project/        DSH Workspace 项目切换、受限文件树 Host 与 workbench Client
+    canvas/         项目作用域 Canvas V2、Typert Remote、Agent tools 与 React Flow UI
     canvas-builtins/ 可独立卸载的 note/image/sequence Host 类型与 Client renderer
   profiles/         compatibility / default / 最终安全 overlay
 patches/            上游补丁清单（默认空）
@@ -93,14 +96,23 @@ upstream.json       npm 运行版本与外部源码 commit 映射
 ### 组合与 UI
 
 - `compatibility` 始终保留上游 Client roster，作为升级和排障退路。
-- `default` 由 Canvas Client 接管文档化 `root` slot，但 panel 内容不硬编码
-  进壳：左侧继续使用 DSH 官方 `ui-sidebar` 外壳，Canvas 仅注册
-  `sidebar.workspaces` 的漫画项目浏览器；中间是 React Flow 画布；右侧由
-  `workbench.agent` 单一 slot 承载可替换 Agent panel，并由该 panel 继续声明
-  官方 `conversation`、`details` 和可追加 header action slots。产品 `layout`
-  service 保持上游三方法契约，并按 DSH 的宽度、窄屏 rail 与 concession 顺序
-  管理 panel。该替换只存在于 default，`compatibility` 仍保留上游 Client
-  roster 与呈现零覆盖。
+- `default` 的产品界面采用 source-owned BeUI 视觉与 Motion 交互层：公开 MIT 组件经
+  `app/packages/beui` 适配为无 Tailwind 运行时依赖的共享 primitives，各物理 Client
+  插件在构建时内联所需实现，React 仍使用 DSH ModuleLoader 单例；上游控件先经官方
+  theme token 收敛，再按文档化 Slot 逐个替换，`compatibility` 不挂载任何该呈现层。
+- `default` 由 Project Client 接管文档化 `root` 与 `sidebar.workspaces` slot，
+  但 panel 内容仍不硬编码进壳：顶部项目选择器投影 DSH Workspace，切换时通过
+  官方 `workspaces.connectWorkspace` / `sessions.open` 同步当前会话；左侧为项目
+  文件目录与嵌套 `project.canvases` seat；Canvas 只向 `workbench.center` 和该
+  nested seat 贡献 React Flow 画布与画布列表。右侧由 `workbench.agent` 单一
+  slot 承载可替换 Agent panel，并继续声明官方 `conversation`、`details` 和
+  可追加 header action slots。Project 提供与上游三方法兼容的 `layout` service，
+  按 DSH 的宽度、窄屏 rail 与 concession 顺序管理 panel。该替换只存在于
+  `default`，`compatibility` 仍保留上游 Client roster 与呈现零覆盖。
+- Active Project 是由 Project Client 根据当前 Session 所属 Workspace 提供的
+  required `comicProject` Cordis service；切换撤销旧 provider，使 Canvas Fiber
+  在完整 cleanup（含长轮询取消和乐观写收敛）后按新 scope 重启，不额外维护
+  全局 ActiveSet 或消息 broker。
 - `default` 额外挂载精确 pin 的 Codex Connect provider，默认模型仍为
   DeepSeek、全局搜索仍走 DeepSeek；独立搜索、图片查看与图片生成能力启用，
   proxy 保持关闭，OAuth 只能由用户在设置中显式发起。`compatibility` 不挂载
@@ -112,6 +124,15 @@ upstream.json       npm 运行版本与外部源码 commit 映射
 ### 数据
 
 - `userData/harness` 与 DSH 会话 JSONL 由上游拥有，可在升级时重建。
+- C1 的项目绑定直接复用 DSH Workspace 身份：`workspaceId` 是注册目录的稳定
+  Workspace UUID，Canvas 的根项目固定为 `project:root`。浏览器只向 Host 发送
+  Workspace ID 与受限相对路径；Host 从 `workspaceRegistry` 取规范根目录，以
+  `ctx.fs.resolve/contains/listDir` 做权威的一层读取，绝不跨 Typert 返回绝对路径
+  或内部 target。Chokidar `followSymlinks:false` 只发送批量失效提示，目录项仍
+  以 `ctx.fs` 重读为准；Client 懒加载展开分支、虚拟化可见行，并在序列缺口、
+  watcher 错误或恢复焦点时 reset/refetch。删除后以同一路径重新注册会获得新的
+  DSH UUID，C1 不自动别名或迁移旧 Canvas；这类 orphan/rebind 归 C2 项目目录
+  catalog 与显式迁移流程处理。
 - Canvas 使用严格的 `schemaVersion: 2` Contract：项目与文档各自带 revision，
   node/edge 以 ID map 保存 `type + kindVersion`、核心几何和 JSON-safe 插件 data；
   React Flow 选择、历史、拖动中间态、组件、`File` 与 `blob:` URL 永不持久化。
@@ -136,7 +157,9 @@ upstream.json       npm 运行版本与外部源码 commit 映射
   打开、迁移或写入失败时明确失败，绝不自动切换 JSON。其他 Host 插件注入
   `canvasHost` 注册类型或执行权威操作；Client 插件注入 `canvasClient` 注册 renderer。
   Agent 仍通过精确八个 `canvas_list/create/select` 与
-  `canvas_get/create_node/update_node/delete_nodes/connect` 工具读写同一权威。
+  `canvas_get/create_node/update_node/delete_nodes/connect` 工具读写同一权威；
+  每次执行按 `exec.agent.session.header.cwd` 经 `workspaceRegistry.resolveByPath`
+  解析 scope 并惰性初始化根项目，绝不跟随另一个浏览器全局选择。
 - `@convax/canvas-builtins` 是独立 physical plugin：Host 贡献
   `comic.note@1`、`comic.image@1`、`comic.sequence@1`，Client 对称贡献 renderer。
   type registry 以 `(type, kindVersion)` 建键，插件缺失或版本不匹配的既存 data
@@ -152,7 +175,7 @@ upstream.json       npm 运行版本与外部源码 commit 映射
 | 里程碑 | 内容 | 出口条件 |
 | --- | --- | --- |
 | B0（本次） | 导入公共基座；隔离 Convax Comic 名称、bundle id 与 userData | 全量门禁、真实运行与目录打包通过 |
-| C1（当前） | Host-owned Canvas、React Flow 画布与三栏工作台 | 同一项目可持久化多个画布，可新建/操作文本与图片节点、外部拖入图片，Agent/插件经 service 操作当前画布 |
+| C1（当前） | DSH Workspace 项目切换、实时文件树、Host-owned Canvas、React Flow 画布与三栏工作台 | 多个绑定目录可在顶部切换，左侧目录实时失效重读，画布按项目隔离持久化；可新建/操作文本与图片节点、外部拖入图片，Agent/插件按其 Session 项目经 service 操作当前画布 |
 | C2 | 首个端到端漫画项目工作流 | 可创建、编辑、持久化并导出最小项目 |
 | C3 | 签名、公证、自动更新与 Windows x64 | 双平台可分发 |
 
@@ -173,8 +196,11 @@ C2 之前不预设具体模型供应商、图片生成服务、持久资产 sche
 - `compatibility` 保持上游 Client 零覆盖；`default` 的组合差异全部可解释。
 - SQLite runtime 的路径隔离、application id、顺序 migration、事务回滚、lease
   回收与 provider 卸载/恢复，以及 CanvasStore workspace 复合身份/CAS、Canvas
-  两级 required provider `PENDING`/恢复均有 headless 测试。Canvas V2 的严格
-  schema/leaf Patch、Host 多画布 revision/active CAS、Typert Remote、单 waiter、
+  两级 required provider `PENDING`/恢复均有 headless 测试。Project Host 的
+  Workspace 根解析、relative path/containment/symlink 防逃逸、lazy list、事件
+  批量/序列 reset、watcher 与长轮询 disposer，以及 Client 项目/session 对齐、
+  切换 race 与虚拟化文件树均有 headless 测试。Canvas V2 的严格 schema/leaf
+  Patch、Host 多画布 revision/active CAS、Typert Remote、单 waiter、
   乐观 Client、builtins 生命周期、Agent 工具、外部拖拽、临时媒体释放与 root
   slot 卸载均有 headless 测试；React Flow
   依赖完整内联到动态 Client bundle，不产生孤立 CSS。单一编辑/空格平移策略、
@@ -190,8 +216,9 @@ C2 之前不预设具体模型供应商、图片生成服务、持久资产 sche
 
 ## 假设与默认值
 
-- 当前只完成桌面基座与 Canvas 文档持久化切片，不代表完整 Comic 项目模型、
-  持久媒体资产库或端到端漫画工作流已完成。default 固定进入三栏工作台；
+- 当前只完成桌面基座、DSH Workspace 项目绑定/目录浏览与 Canvas 文档持久化
+  切片，不代表完整 Comic 项目模型、持久媒体资产库或端到端漫画工作流已完成。
+  default 固定进入三栏工作台；
   需要上游原始界面时显式启动 `compatibility` profile。
 - `@convax/*` 包命名空间、`CONVAX_*` 环境变量、IPC 与 token header 是
   通用基座协议，本次不分叉；应用身份与用户数据由新 bundle id 隔离。

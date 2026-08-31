@@ -156,7 +156,39 @@ async function verifyFence(instance) {
 }
 
 async function verifyCanvasRemote(instance) {
-  const rpcId = `convax-canvas-v2-smoke-${Date.now()}`
+  const suffix = Date.now()
+  const workspaceId = `workspace:smoke:${process.pid}:${suffix}`
+  const createRpcId = `convax-canvas-v2-create-smoke-${suffix}`
+  const created = await fetch(`${instance.origin}/api/canvasV2/createProject`, {
+    method: 'POST',
+    headers: {
+      [HEADER]: instance.token,
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({
+      type: 'client-request',
+      rpcId: createRpcId,
+      method: 'canvasV2/createProject',
+      payload: {
+        args: {
+          request: {
+            workspaceId,
+            projectId: 'project:root',
+            canvasId: 'canvas:main',
+            title: 'Smoke canvas',
+            mutationId: createRpcId,
+            source: 'upstream-smoke',
+          },
+        },
+      },
+    }),
+  })
+  const createdEnvelope = await created.json()
+  if (created.status !== 200 || createdEnvelope?.result?.ok !== true) {
+    throw new Error(`Canvas V2 project creation failed: ${JSON.stringify(createdEnvelope)}`)
+  }
+
+  const rpcId = `convax-canvas-v2-get-smoke-${suffix}`
   const response = await fetch(`${instance.origin}/api/canvasV2/getProject`, {
     method: 'POST',
     headers: {
@@ -170,8 +202,8 @@ async function verifyCanvasRemote(instance) {
       payload: {
         args: {
           request: {
-            workspaceId: 'workspace:default',
-            projectId: 'project:default',
+            workspaceId,
+            projectId: 'project:root',
           },
         },
       },
@@ -183,8 +215,8 @@ async function verifyCanvasRemote(instance) {
     || envelope?.rpcId !== rpcId
     || envelope?.result?.ok !== true
     || project?.schemaVersion !== 2
-    || project?.workspaceId !== 'workspace:default'
-    || project?.id !== 'project:default'
+    || project?.workspaceId !== workspaceId
+    || project?.id !== 'project:root'
     || project?.activeCanvasId !== 'canvas:main') {
     throw new Error(`Canvas V2 Remote integration failed: ${JSON.stringify(envelope)}`)
   }
