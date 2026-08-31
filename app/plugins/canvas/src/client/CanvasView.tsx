@@ -794,10 +794,12 @@ function CanvasSurface({ workspace, snapshot }: {
           onDragLeave={onDragLeave}
           onDrop={(event) => { void onDrop(event) }}
         >
-          <div className="cvxCanvasFloatingTitle" aria-label={`当前画布：${snapshot.document.title}`}>
-            <CanvasIcon size={15} />
-            <strong>{snapshot.document.title}</strong>
-          </div>
+          <header className="cvxCanvasTitlebar">
+            <div className="cvxCanvasFloatingTitle" aria-label={`当前画布：${snapshot.document.title}`}>
+              <CanvasIcon size={15} />
+              <strong>{snapshot.document.title}</strong>
+            </div>
+          </header>
           <div className="cvxCanvasToolbar" role="toolbar" aria-label="画布工具">
             <div className="cvxCanvasTools">
               <Button variant="ghost" size="sm" className="cvxCanvasButton" onClick={() => { createNode('note') }}><NoteIcon /><span className="cvxCanvasActionLabel">文本</span></Button>
