@@ -261,20 +261,17 @@ export function FileTree({
       layoutRoot
       onMouseLeave={() => { setHoveredId(null) }}
     >
-      <AnimatePresence initial={false}>
-        {rows.map(row => {
+      {rows.map(row => {
           const isFolder = row.item.type === 'folder'
           const isOpen = isFolder && expanded.has(row.item.value)
           const isSelected = selectedId === row.item.value
           const isHovered = hoveredId === row.item.value
           return (
             <motion.div
-              layout={reduce ? false : 'position'}
               key={row.item.value}
               initial={reduce ? false : { opacity: 0, y: -6 }}
               animate={{ opacity: row.item.disabled === true ? 0.42 : 1, y: 0 }}
-              {...(reduce ? {} : { exit: { opacity: 0, y: -4 } })}
-              transition={reduce ? { duration: 0 } : SPRING_LAYOUT}
+              transition={reduce ? { duration: 0 } : { duration: 0.18, ease: EASE_OUT }}
               className="cvxBeuiFileTreeRowShell"
             >
               <button
@@ -341,8 +338,7 @@ export function FileTree({
               </button>
             </motion.div>
           )
-        })}
-      </AnimatePresence>
+      })}
     </motion.div>
   )
 }

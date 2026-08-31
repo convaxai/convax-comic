@@ -107,7 +107,9 @@ upstream.json       npm 运行版本与外部源码 commit 映射
   nested seat 贡献 React Flow 画布与画布列表。右侧由 `workbench.agent` 单一
   slot 承载可替换 Agent panel，并继续声明官方 `conversation`、`details` 和
   可追加 header action slots。Project 提供与上游三方法兼容的 `layout` service，
-  按 DSH 的宽度、窄屏 rail 与 concession 顺序管理 panel。该替换只存在于
+  左右 panel 的偏好宽度由该 service 持有，并通过支持指针捕获、键盘与双击复位的
+  separator 调整；窄窗只压缩实际列宽，空间恢复后仍恢复偏好宽度。该 service 按
+  DSH 的窄屏 rail 与 concession 顺序管理 panel。该替换只存在于
   `default`，`compatibility` 仍保留上游 Client roster 与呈现零覆盖。
 - Active Project 是由 Project Client 根据当前 Session 所属 Workspace 提供的
   required `comicProject` Cordis service；切换撤销旧 provider，使 Canvas Fiber

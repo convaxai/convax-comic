@@ -19,11 +19,14 @@ describe('Canvas viewport CSS contract', () => {
     expect(rule('.cvxCanvasStage')).toMatch(/overflow:\s*hidden/u)
   })
 
-  it('uses the entire center surface and floats the title without a topbar row', () => {
+  it('uses the entire center surface while preserving a native draggable titlebar', () => {
     expect(rule('.cvxCanvasOverlay')).toMatch(/display:\s*block/u)
     expect(rule('.cvxCanvasOverlay')).not.toMatch(/grid-template-rows/u)
+    expect(rule('.cvxCanvasTitlebar')).toMatch(/-webkit-app-region:\s*drag/u)
+    expect(rule('.cvxCanvasTitlebar')).toMatch(/height:\s*64px/u)
     expect(rule('.cvxCanvasFloatingTitle')).toMatch(/position:\s*absolute/u)
     expect(rule('.cvxCanvasFloatingTitle')).toMatch(/top:\s*20px/u)
+    expect(rule('.cvxCanvasToolbar')).toMatch(/-webkit-app-region:\s*no-drag/u)
   })
 
   it('only shows the grab cursor while Space panning is active', () => {

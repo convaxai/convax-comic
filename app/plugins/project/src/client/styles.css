@@ -23,6 +23,12 @@
   font-family: var(--dsw-font-family, Inter, ui-sans-serif, system-ui, -apple-system, sans-serif);
 }
 
+.cvxProjectShell[data-resizing] {
+  transition: none;
+  cursor: col-resize;
+  user-select: none;
+}
+
 body[data-ds-dark-theme] .cvxProjectShell {
   --cvx-project-accent: #c6f22d;
 }
@@ -54,6 +60,55 @@ body[data-ds-dark-theme] .cvxProjectShell {
   border-left: 0;
   visibility: hidden;
   pointer-events: none;
+}
+
+.cvxProjectResizeHandle {
+  position: absolute;
+  z-index: 80;
+  top: 0;
+  bottom: 0;
+  width: 8px;
+  padding: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  cursor: col-resize;
+  touch-action: none;
+  user-select: none;
+  pointer-events: auto;
+  -webkit-app-region: no-drag;
+}
+
+.cvxProjectResizeHandle[data-side="sidebar"] {
+  left: calc(var(--cvx-sidebar, 300px) - 4px);
+}
+
+.cvxProjectResizeHandle[data-side="agent"] {
+  right: calc(var(--cvx-agent, 380px) - 4px);
+}
+
+.cvxProjectResizeHandle::after {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 1px;
+  content: "";
+  background: transparent;
+  transform: translateX(-50%);
+  transition: width 120ms ease, background-color 120ms ease;
+}
+
+.cvxProjectResizeHandle:hover::after,
+.cvxProjectResizeHandle:focus-visible::after,
+.cvxProjectShell[data-resizing="sidebar"] .cvxProjectResizeHandle[data-side="sidebar"]::after,
+.cvxProjectShell[data-resizing="agent"] .cvxProjectResizeHandle[data-side="agent"]::after {
+  width: 3px;
+  background: var(--cvx-project-accent);
+}
+
+.cvxProjectResizeHandle:focus-visible {
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--cvx-project-accent) 28%, transparent);
 }
 
 .cvxProjectOverlay {
@@ -121,7 +176,8 @@ body[data-ds-dark-theme] .cvxProjectShell {
 .cvxProjectFileSection {
   display: flex;
   min-height: 36px;
-  flex: 1 1 auto;
+  max-height: calc(100% - 36px);
+  flex: 0 1 auto;
   flex-direction: column;
   overflow: hidden;
 }
@@ -181,11 +237,15 @@ body[data-ds-dark-theme] .cvxProjectShell {
 .cvxProjectFiles {
   position: relative;
   min-height: 0;
-  flex: 1;
+  flex: 0 1 auto;
   overflow: auto;
   padding: 0 8px 8px;
   font-size: 13px;
   overscroll-behavior: contain;
+}
+
+.cvxProjectFiles[hidden] {
+  display: none;
 }
 
 .cvxProjectFileTree {
@@ -275,12 +335,15 @@ body[data-ds-dark-theme] .cvxProjectShell {
   padding: 0 12px;
   border-bottom: 1px solid var(--cvx-project-line);
   font-weight: 650;
+  -webkit-app-region: drag;
+  user-select: none;
 }
 
 .cvxProjectAgentActions {
   display: flex;
   align-items: center;
   gap: 4px;
+  -webkit-app-region: no-drag;
 }
 
 .cvxProjectAgentToggle,
@@ -354,7 +417,20 @@ body[data-ds-dark-theme] .cvxProjectShell {
   color: var(--cvx-project-muted);
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .cvxProjectShell,
+  .cvxProjectSectionChevron,
+  .cvxProjectResizeHandle::after {
+    transition: none;
+  }
+}
+
 @media (forced-colors: active) {
+  .cvxProjectResizeHandle:focus-visible::after {
+    width: 3px;
+    background: Highlight;
+  }
+
   .cvxProjectSelector select,
   .cvxProjectSidebar,
   .cvxProjectAgentSeat,

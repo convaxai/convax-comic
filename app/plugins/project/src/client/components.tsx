@@ -1,15 +1,29 @@
 import { Button, BEUI_COMPONENT_CSS, BEUI_THEME_CSS, FileTree, FileTreeFile, FileTreeFolder } from '@convax/beui'
 import {
   useEffect,
+  useRef,
   useState,
   useSyncExternalStore,
   type CSSProperties,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type PointerEvent as ReactPointerEvent,
   type ReactElement,
   type ReactNode,
 } from 'react'
 import type { ProjectFileEntry } from '../contracts.js'
 import { ComicProjectRuntime } from './runtime.js'
-import { ProjectLayout } from './layout.js'
+import {
+  DEFAULT_AGENT_WIDTH,
+  DEFAULT_SIDEBAR_WIDTH,
+  MAX_AGENT_WIDTH,
+  MAX_SIDEBAR_WIDTH,
+  MIN_AGENT_WIDTH,
+  MIN_CENTER_WIDTH,
+  MIN_SIDEBAR_WIDTH,
+  ProjectLayout,
+  projectPanelWidthFromPointer,
+  resolveProjectPanelColumns,
+} from './layout.js'
 import { ChevronRightIcon, PanelRightIcon, PlusIcon, ProjectEntryIcon } from './icons.js'
 import css from './styles.css?inline'
 
@@ -25,21 +39,139 @@ export interface ProjectShellProps {
   readonly renderSlot: RenderSlot
 }
 
-export function ProjectShell({ runtime, layout, renderSlot }: ProjectShellProps): ReactElement {
-  const state = useSyncExternalStore(layout.subscribe, layout.getSnapshot, layout.getSnapshot)
-  const style = {
-    '--cvx-sidebar': state.sidebarOpen ? '300px' : '56px',
-    '--cvx-agent': state.agentOpen ? '380px' : '0px',
-  } as CSSProperties
+interface ProjectResizeHandleProps {
+  readonly side: 'sidebar' | 'agent'
+  readonly value: number
+  readonly min: number
+  readonly max: number
+  readonly onResize: (width: number) => void
+  readonly onReset: () => void
+  readonly onDraggingChange: (dragging: boolean) => void
+}
+
+function ProjectResizeHandle({ side, value, min, max, onResize, onReset, onDraggingChange }: ProjectResizeHandleProps): ReactElement {
+  const drag = useRef<{ readonly pointerId: number; readonly startX: number; readonly startWidth: number } | null>(null)
+  const frame = useRef<number | null>(null)
+  const pendingWidth = useRef<number | null>(null)
+  const direction = side === 'sidebar' ? 1 : -1
+  const label = side === 'sidebar' ? 'Resize Project sidebar' : 'Resize Agent sidebar'
+  const resize = (width: number): void => { onResize(Math.min(max, Math.max(min, width))) }
+  const flushResize = (): void => {
+    if (frame.current !== null) window.cancelAnimationFrame(frame.current)
+    frame.current = null
+    const width = pendingWidth.current
+    pendingWidth.current = null
+    if (width !== null) resize(width)
+  }
+  const scheduleResize = (width: number): void => {
+    pendingWidth.current = width
+    if (frame.current !== null) return
+    frame.current = window.requestAnimationFrame(() => {
+      frame.current = null
+      const next = pendingWidth.current
+      pendingWidth.current = null
+      if (next !== null) resize(next)
+    })
+  }
+  useEffect(() => () => {
+    if (frame.current !== null) window.cancelAnimationFrame(frame.current)
+  }, [])
+  const endDrag = (element: HTMLDivElement, pointerId: number): void => {
+    flushResize()
+    if (element.hasPointerCapture(pointerId)) element.releasePointerCapture(pointerId)
+    drag.current = null
+    onDraggingChange(false)
+  }
+  const handleKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>): void => {
+    const step = event.shiftKey ? 32 : 12
+    let next: number | undefined
+    if (event.key === 'Home') next = min
+    else if (event.key === 'End') next = max
+    else if (event.key === 'ArrowLeft') next = value - direction * step
+    else if (event.key === 'ArrowRight') next = value + direction * step
+    if (next === undefined) return
+    event.preventDefault()
+    resize(next)
+  }
   return (
     <div
+      className="cvxProjectResizeHandle"
+      data-side={side}
+      role="separator"
+      aria-label={label}
+      aria-orientation="vertical"
+      aria-valuemin={min}
+      aria-valuemax={max}
+      aria-valuenow={value}
+      aria-valuetext={`${value} pixels`}
+      tabIndex={0}
+      title={`${label} · Double-click to reset`}
+      onDoubleClick={onReset}
+      onKeyDown={handleKeyDown}
+      onPointerDown={(event: ReactPointerEvent<HTMLDivElement>) => {
+        if (event.button !== 0) return
+        event.preventDefault()
+        drag.current = { pointerId: event.pointerId, startX: event.clientX, startWidth: value }
+        event.currentTarget.setPointerCapture(event.pointerId)
+        onDraggingChange(true)
+      }}
+      onPointerMove={(event: ReactPointerEvent<HTMLDivElement>) => {
+        const active = drag.current
+        if (active === null || active.pointerId !== event.pointerId) return
+        scheduleResize(projectPanelWidthFromPointer(side, active.startWidth, active.startX, event.clientX))
+      }}
+      onPointerUp={(event: ReactPointerEvent<HTMLDivElement>) => { endDrag(event.currentTarget, event.pointerId) }}
+      onPointerCancel={(event: ReactPointerEvent<HTMLDivElement>) => { endDrag(event.currentTarget, event.pointerId) }}
+      onLostPointerCapture={() => {
+        if (drag.current === null) return
+        flushResize()
+        drag.current = null
+        onDraggingChange(false)
+      }}
+    />
+  )
+}
+
+export function ProjectShell({ runtime, layout, renderSlot }: ProjectShellProps): ReactElement {
+  const state = useSyncExternalStore(layout.subscribe, layout.getSnapshot, layout.getSnapshot)
+  const shellRef = useRef<HTMLDivElement>(null)
+  const [shellWidth, setShellWidth] = useState(0)
+  const [resizing, setResizing] = useState<'sidebar' | 'agent'>()
+  useEffect(() => {
+    const shell = shellRef.current
+    if (shell === null) return
+    const measure = (): void => { setShellWidth(shell.getBoundingClientRect().width) }
+    measure()
+    if (typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(measure)
+    observer.observe(shell)
+    return () => { observer.disconnect() }
+  }, [])
+  const columns = resolveProjectPanelColumns(state, shellWidth)
+  const sidebarMax = shellWidth > 0
+    ? Math.max(MIN_SIDEBAR_WIDTH, Math.min(MAX_SIDEBAR_WIDTH, shellWidth - columns.agent - MIN_CENTER_WIDTH))
+    : MAX_SIDEBAR_WIDTH
+  const agentMax = shellWidth > 0
+    ? Math.max(MIN_AGENT_WIDTH, Math.min(MAX_AGENT_WIDTH, shellWidth - columns.sidebar - MIN_CENTER_WIDTH))
+    : MAX_AGENT_WIDTH
+  const style = {
+    '--cvx-sidebar': `${columns.sidebar}px`,
+    '--cvx-agent': `${columns.agent}px`,
+  } as CSSProperties
+  const markDragging = (side: 'sidebar' | 'agent', dragging: boolean): void => {
+    setResizing(current => dragging ? side : current === side ? undefined : current)
+  }
+  return (
+    <div
+      ref={shellRef}
       className="cvxProjectShell"
       data-sidebar-open={state.sidebarOpen || undefined}
       data-agent-open={state.agentOpen || undefined}
+      data-resizing={resizing}
       style={style}
     >
       <ProjectStyles />
-      <aside className="cvxProjectSidebar">{renderSlot('sidebar', { collapsed: !state.sidebarOpen, width: state.sidebarOpen ? 300 : 56 })}</aside>
+      <aside className="cvxProjectSidebar">{renderSlot('sidebar', { collapsed: !state.sidebarOpen, width: columns.sidebar })}</aside>
       <main className="cvxProjectCenter">
         {renderSlot('workbench.center', { project: runtime })}
       </main>
@@ -47,10 +179,32 @@ export function ProjectShell({ runtime, layout, renderSlot }: ProjectShellProps)
         {renderSlot('workbench.agent', {
           collapsed: !state.agentOpen,
           detailsOpen: state.detailsOpen,
-          width: state.agentOpen ? 380 : 0,
+          width: columns.agent,
           toggleAgent: () => { layout.toggleAgent() },
         })}
       </div>
+      {state.sidebarOpen && (
+        <ProjectResizeHandle
+          side="sidebar"
+          value={columns.sidebar}
+          min={MIN_SIDEBAR_WIDTH}
+          max={sidebarMax}
+          onResize={(width) => { layout.resizeSidebar(width) }}
+          onReset={() => { layout.resetSidebarWidth() }}
+          onDraggingChange={(dragging) => { markDragging('sidebar', dragging) }}
+        />
+      )}
+      {state.agentOpen && (
+        <ProjectResizeHandle
+          side="agent"
+          value={columns.agent}
+          min={MIN_AGENT_WIDTH}
+          max={agentMax}
+          onResize={(width) => { layout.resizeAgent(width) }}
+          onReset={() => { layout.resetAgentWidth() }}
+          onDraggingChange={(dragging) => { markDragging('agent', dragging) }}
+        />
+      )}
       {!state.agentOpen && (
         <button
           className="cvxProjectAgentReopen"

@@ -523,9 +523,20 @@ body[data-ds-dark-theme] .cvxTreeSection {
   align-items: center;
 }
 
+/* Electron turns a drag region into the native titlebar, including double-click zoom. */
+.cvxCanvasTitlebar {
+  position: absolute;
+  z-index: 4;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 64px;
+  -webkit-app-region: drag;
+  user-select: none;
+}
+
 .cvxCanvasFloatingTitle {
   position: absolute;
-  z-index: 32;
   top: 20px;
   left: 20px;
   display: flex;
@@ -534,7 +545,6 @@ body[data-ds-dark-theme] .cvxTreeSection {
   gap: 7px;
   color: var(--cvx-canvas-secondary);
   pointer-events: none;
-  user-select: none;
 }
 
 .cvxCanvasFloatingTitle svg {
@@ -625,6 +635,7 @@ body[data-ds-dark-theme] .cvxTreeSection {
   box-shadow: var(--cvx-canvas-shadow-medium);
   backdrop-filter: blur(16px);
   transform: translateX(-50%);
+  -webkit-app-region: no-drag;
 }
 
 .cvxCanvasTools {
