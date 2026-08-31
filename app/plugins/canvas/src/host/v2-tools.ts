@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import type { Context } from '@deepseek-ai/cordis'
-import { defineTool } from '@deepseek-ai/dsh-tools'
+import { defineTool, type ToolRunContext } from '@deepseek-ai/dsh-tools'
 import {
   COMIC_BUILTIN_KIND_VERSION,
   COMIC_IMAGE_NODE_TYPE,
@@ -22,6 +22,10 @@ export interface CanvasV2ToolScope {
   readonly workspaceId: string
   readonly projectId: string
 }
+
+export type CanvasV2ToolScopeResolver = (
+  execution: ToolRunContext,
+) => CanvasV2ToolScope | Promise<CanvasV2ToolScope>
 
 const TOOL_NAMES = [
   'canvas_get',
@@ -172,8 +176,14 @@ const mutationOutput = {
 export function registerCanvasV2Tools(
   ctx: Context,
   canvasHost: CanvasHostApi,
-  scope: CanvasV2ToolScope,
+  scope: CanvasV2ToolScope | CanvasV2ToolScopeResolver,
 ): () => void {
+  const resolveScope = async (execution: ToolRunContext): Promise<CanvasV2ToolScope> => {
+    execution.signal.throwIfAborted()
+    const resolved = typeof scope === 'function' ? await scope(execution) : scope
+    execution.signal.throwIfAborted()
+    return resolved
+  }
   const disposers: Array<() => void> = []
   const register = (definition: Parameters<Context['tools']['register']>[0]): void => {
     disposers.push(ctx.tools.register(definition))
@@ -200,8 +210,9 @@ export function registerCanvasV2Tools(
           text: `Canvas revision ${value.revision}\n${value.documentJson}`,
         }],
       },
-      execute: async () => {
-        const { project, document } = await readActiveCanvas(canvasHost, scope)
+      execute: async (_args, execution) => {
+        const currentScope = await resolveScope(execution)
+        const { project, document } = await readActiveCanvas(canvasHost, currentScope)
         return {
           revision: document.revision,
           projectRevision: project.revision,
@@ -217,7 +228,8 @@ export function registerCanvasV2Tools(
       description: 'List every canvas in the current Convax project and identify the active canvas.',
       parameters: {},
       output: projectOutput,
-      execute: async () => projectResult(await readProject(canvasHost, scope)),
+      execute: async (_args, execution) =>
+        projectResult(await readProject(canvasHost, await resolveScope(execution))),
       isConcurrencySafe: () => true,
     }))
 
@@ -228,17 +240,18 @@ export function registerCanvasV2Tools(
         title: { type: 'string', description: 'Optional canvas title.' },
       },
       output: projectOutput,
-      execute: async (args) => {
-        const project = await readProject(canvasHost, scope)
+      execute: async (args, execution) => {
+        const currentScope = await resolveScope(execution)
+        const project = await readProject(canvasHost, currentScope)
         const canvasId = generatedId('canvas')
         await canvasHost.documents.createAndActivate({
-          ...scope,
+          ...currentScope,
           canvasId,
           title: args.title ?? '',
           expectedProjectRevision: project.revision,
           ...mutationMetadata('canvas_create'),
         })
-        return projectResult(await readProject(canvasHost, scope))
+        return projectResult(await readProject(canvasHost, currentScope))
       },
     }))
 
@@ -249,10 +262,11 @@ export function registerCanvasV2Tools(
         canvasId: { type: 'string', required: true },
       },
       output: projectOutput,
-      execute: async (args) => {
-        const project = await readProject(canvasHost, scope)
+      execute: async (args, execution) => {
+        const currentScope = await resolveScope(execution)
+        const project = await readProject(canvasHost, currentScope)
         const selected = await canvasHost.projects.setActiveCanvas({
-          ...scope,
+          ...currentScope,
           canvasId: args.canvasId,
           expectedRevision: project.revision,
           ...mutationMetadata('canvas_select'),
@@ -274,8 +288,9 @@ export function registerCanvasV2Tools(
         alt: { type: 'string', description: 'Alternative text for an image node.' },
       },
       output: mutationOutput,
-      execute: async (args) => {
-        const { project, document } = await readActiveCanvas(canvasHost, scope)
+      execute: async (args, execution) => {
+        const currentScope = await resolveScope(execution)
+        const { project, document } = await readActiveCanvas(canvasHost, currentScope)
         const id = generatedId('node')
         const title = args.title ?? (args.kind === 'note' ? 'Note' : 'Image')
         if (args.kind === 'note' && (args.url !== undefined || args.alt !== undefined)) {
@@ -308,7 +323,7 @@ export function registerCanvasV2Tools(
               },
             }
         const result = await canvasHost.documents.applyActivePatch({
-          ...scope,
+          ...currentScope,
           expectedProjectRevision: project.revision,
           expectedActiveCanvasId: document.id,
           expectedRevision: document.revision,
@@ -334,8 +349,9 @@ export function registerCanvasV2Tools(
         height: { type: 'number' },
       },
       output: mutationOutput,
-      execute: async (args) => {
-        const { project, document } = await readActiveCanvas(canvasHost, scope)
+      execute: async (args, execution) => {
+        const currentScope = await resolveScope(execution)
+        const { project, document } = await readActiveCanvas(canvasHost, currentScope)
         const previous = requireToolMutableNode(document, args.id)
         if (previous.type === COMIC_NOTE_NODE_TYPE && (args.alt !== undefined || args.url !== undefined)) {
           throw new Error('note nodes do not accept image fields')
@@ -373,7 +389,7 @@ export function registerCanvasV2Tools(
           ...(Object.keys(data).length === 0 ? {} : { data }),
         }
         const result = await canvasHost.documents.applyActivePatch({
-          ...scope,
+          ...currentScope,
           expectedProjectRevision: project.revision,
           expectedActiveCanvasId: document.id,
           expectedRevision: document.revision,
@@ -394,9 +410,10 @@ export function registerCanvasV2Tools(
         ids: { type: 'array', required: true, items: { type: 'string' } },
       },
       output: mutationOutput,
-      execute: async (args) => {
+      execute: async (args, execution) => {
         if (args.ids.length === 0) throw new Error('canvas_delete_nodes requires at least one id')
-        const { project, document } = await readActiveCanvas(canvasHost, scope)
+        const currentScope = await resolveScope(execution)
+        const { project, document } = await readActiveCanvas(canvasHost, currentScope)
         const nodeIds = [...new Set(args.ids)].sort()
         for (const id of nodeIds) {
           if (document.nodes[id] === undefined) throw new Error(`canvas node not found: ${id}`)
@@ -411,7 +428,7 @@ export function registerCanvasV2Tools(
           ...nodeIds.map(id => ({ op: 'remove' as const, path: pointer('nodes', id) })),
         ]
         const result = await canvasHost.documents.applyActivePatch({
-          ...scope,
+          ...currentScope,
           expectedProjectRevision: project.revision,
           expectedActiveCanvasId: document.id,
           expectedRevision: document.revision,
@@ -430,8 +447,9 @@ export function registerCanvasV2Tools(
         target: { type: 'string', required: true },
       },
       output: mutationOutput,
-      execute: async (args) => {
-        const { project, document } = await readActiveCanvas(canvasHost, scope)
+      execute: async (args, execution) => {
+        const currentScope = await resolveScope(execution)
+        const { project, document } = await readActiveCanvas(canvasHost, currentScope)
         if (document.nodes[args.source] === undefined) throw new Error(`canvas node not found: ${args.source}`)
         if (document.nodes[args.target] === undefined) throw new Error(`canvas node not found: ${args.target}`)
         const id = generatedId('edge')
@@ -444,7 +462,7 @@ export function registerCanvasV2Tools(
           data: { label: '' },
         }
         const result = await canvasHost.documents.applyActivePatch({
-          ...scope,
+          ...currentScope,
           expectedProjectRevision: project.revision,
           expectedActiveCanvasId: document.id,
           expectedRevision: document.revision,

@@ -18,16 +18,14 @@
     },
     "client": {
       "inject": [
-        "@deepseek-ai/dsh-api-remotes",
-        "@deepseek-ai/dsh-client-runtime",
-        "@deepseek-ai/dsh-client-ui-conversation",
-        "@deepseek-ai/dsh-client-ui-layout",
-        "@deepseek-ai/dsh-client-ui-settings"
+        "@convax/project",
+        "@deepseek-ai/dsh-api-remotes"
       ],
       "platform": "web"
     }
   },
   "dependencies": {
+    "@convax/beui": "workspace:*",
     "@xyflow/react": "12.11.3",
     "zod": "^4.4.3"
   },
@@ -35,6 +33,7 @@
     "@convax/canvas-api": "workspace:*",
     "@convax/canvas-builtins": "workspace:*",
     "@convax/canvas-store-api": "workspace:*",
+    "@convax/project": "workspace:*",
     "@deepseek-ai/cordis": "4.0.1",
     "@deepseek-ai/dsh-api-remotes": "0.1.1-rc.2",
     "@deepseek-ai/dsh-client-runtime": "0.1.1-rc.2",

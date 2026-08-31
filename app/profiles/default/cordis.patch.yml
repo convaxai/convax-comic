@@ -91,6 +91,9 @@
     - id: app-ui
       name: '@convax/ui'
 
+    - id: app-project
+      name: '@convax/project'
+
     - id: app-canvas-store-sqlite
       name: '@convax/canvas-store-sqlite'
 

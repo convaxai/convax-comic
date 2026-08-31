@@ -127,6 +127,10 @@ export interface CanvasProjectSyncOptions {
   readonly renderers?: CanvasRendererRegistry
   readonly workspace?: ComicCanvasWorkspaceOptions
   readonly createCanvasId?: () => CanvasId
+  readonly ensureProject?: {
+    readonly canvasId?: CanvasId
+    readonly title?: string
+  }
   readonly fitView?: CanvasClientServiceOptions['fitView']
   readonly setViewport?: CanvasClientServiceOptions['setViewport']
 }
@@ -167,6 +171,7 @@ export class CanvasProjectSync {
   readonly #revisionWaitMs: number | undefined
   readonly #workspaceOptions: ComicCanvasWorkspaceOptions
   readonly #createCanvasId: () => CanvasId
+  readonly #ensureProject: CanvasProjectSyncOptions['ensureProject']
   readonly #fitView: CanvasClientServiceOptions['fitView']
   readonly #setViewport: CanvasClientServiceOptions['setViewport']
   readonly #ownsRenderers: boolean
@@ -193,6 +198,7 @@ export class CanvasProjectSync {
     this.#revisionWaitMs = options.revisionWaitMs
     this.#workspaceOptions = options.workspace ?? {}
     this.#createCanvasId = options.createCanvasId ?? defaultCanvasId
+    this.#ensureProject = options.ensureProject
     this.#fitView = options.fitView
     this.#setViewport = options.setViewport
     this.#ownsRenderers = options.renderers === undefined
@@ -254,10 +260,12 @@ export class CanvasProjectSync {
   }
 
   async #startOnce(): Promise<void> {
-    const project = await this.#getProject()
+    const project = await this.#getOrCreateProject()
+    this.#assertActive()
     const service = this.#createService(project.activeCanvasId)
     try {
       await service.start()
+      this.#assertActive()
       const workspace = new ComicCanvasWorkspace(service, { ...this.#workspaceOptions, disposeService: false })
       this.#project = project
       this.#service = service
@@ -323,6 +331,14 @@ export class CanvasProjectSync {
   async dispose(): Promise<void> {
     if (this.#disposed) return
     this.#disposed = true
+    const startup = this.#startTask
+    if (startup !== undefined) {
+      try {
+        await startup
+      } catch {
+        // A startup invalidated by disposal has already cleaned its local service.
+      }
+    }
     try {
       await this.#projectTail
     } catch {
@@ -432,11 +448,42 @@ export class CanvasProjectSync {
     for (const listener of [...this.#projectListeners]) listener()
   }
 
+  async #getOrCreateProject(): Promise<CanvasProject> {
+    try {
+      return await this.#getProject()
+    } catch (error) {
+      if (!(error instanceof CanvasRemoteV2Error)
+        || (error.code !== 'PROJECT_NOT_FOUND' && !error.message.startsWith('Canvas project not found:'))
+        || this.#ensureProject === undefined) throw error
+    }
+
+    this.#assertActive()
+    const canvasId = this.#ensureProject.canvasId ?? this.#createCanvasId()
+    try {
+      const project = await this.#unwrap(this.#remote.createProject({
+        workspaceId: this.workspaceId,
+        projectId: this.projectId,
+        canvasId,
+        title: this.#ensureProject.title ?? 'Untitled canvas',
+        ...this.#metadata('initialize-project'),
+      }))
+      return this.#assertProjectScope(project)
+    } catch (error) {
+      if (!(error instanceof CanvasRemoteV2Error)
+        || (error.code !== 'PROJECT_ALREADY_EXISTS' && !error.message.startsWith('Canvas project already exists:'))) throw error
+      return await this.#getProject()
+    }
+  }
+
   async #getProject(): Promise<CanvasProject> {
     const project = await this.#unwrap(this.#remote.getProject({
       workspaceId: this.workspaceId,
       projectId: this.projectId,
     }))
+    return this.#assertProjectScope(project)
+  }
+
+  #assertProjectScope(project: CanvasProject): CanvasProject {
     if (project.workspaceId !== this.workspaceId || project.id !== this.projectId) {
       throw new Error('Canvas V2 Remote returned a different project')
     }

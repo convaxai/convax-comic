@@ -224,7 +224,39 @@ terminal.onExit(event => {
     throw new Error(`packaged Agent preset policy failed: ${JSON.stringify(presetEnvelope)}`)
   }
 
-  const canvasRpcId = 'convax-packaged-canvas-v2-smoke'
+  const canvasSuffix = `${process.pid}:${Date.now()}`
+  const canvasWorkspaceId = `workspace:smoke:${canvasSuffix}`
+  const createCanvasRpcId = `convax-packaged-canvas-v2-create-smoke-${canvasSuffix}`
+  const createdCanvas = await fetch(`${origin.origin}/api/canvasV2/createProject`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'x-convax-control-token': token,
+    },
+    body: JSON.stringify({
+      type: 'client-request',
+      rpcId: createCanvasRpcId,
+      method: 'canvasV2/createProject',
+      payload: {
+        args: {
+          request: {
+            workspaceId: canvasWorkspaceId,
+            projectId: 'project:root',
+            canvasId: 'canvas:main',
+            title: 'Packaged smoke canvas',
+            mutationId: createCanvasRpcId,
+            source: 'packaged-smoke',
+          },
+        },
+      },
+    }),
+  })
+  const createdCanvasEnvelope = await createdCanvas.json()
+  if (createdCanvas.status !== 200 || createdCanvasEnvelope?.result?.ok !== true) {
+    throw new Error(`packaged Canvas V2 project creation failed: ${JSON.stringify(createdCanvasEnvelope)}`)
+  }
+
+  const canvasRpcId = 'convax-packaged-canvas-v2-get-smoke'
   const canvas = await fetch(`${origin.origin}/api/canvasV2/getProject`, {
     method: 'POST',
     headers: {
@@ -238,8 +270,8 @@ terminal.onExit(event => {
       payload: {
         args: {
           request: {
-            workspaceId: 'workspace:default',
-            projectId: 'project:default',
+            workspaceId: canvasWorkspaceId,
+            projectId: 'project:root',
           },
         },
       },
@@ -251,8 +283,8 @@ terminal.onExit(event => {
     || canvasEnvelope?.rpcId !== canvasRpcId
     || canvasEnvelope?.result?.ok !== true
     || canvasProject?.schemaVersion !== 2
-    || canvasProject?.workspaceId !== 'workspace:default'
-    || canvasProject?.id !== 'project:default'
+    || canvasProject?.workspaceId !== canvasWorkspaceId
+    || canvasProject?.id !== 'project:root'
     || canvasProject?.activeCanvasId !== 'canvas:main') {
     throw new Error(`packaged Canvas V2 Remote failed: ${JSON.stringify(canvasEnvelope)}`)
   }

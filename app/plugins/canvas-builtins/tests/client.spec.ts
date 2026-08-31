@@ -13,7 +13,6 @@ import { describe, expect, it, vi } from 'vitest'
 import * as Client from '../src/client/index.ts'
 import type { ComicImageData, ComicNoteData, ComicSequenceData } from '../src/contracts.ts'
 
-const FIBER_PENDING = 0
 const FIBER_ACTIVE = 2
 
 class FakeRendererRegistry implements CanvasRendererRegistry {
@@ -109,7 +108,17 @@ describe('canvas builtin Client renderers', () => {
     const props = nodeProps<ComicNoteData>('comic.note', { title: 'Caption', text: 'Before' })
     const element = Client.ComicNoteRenderer(props)
     expect(element.type).toBe('textarea')
-    expect(element.props).toMatchObject({ 'aria-label': 'Caption', value: 'Before' })
+    expect(element.props).toMatchObject({
+      'aria-label': 'Caption',
+      'data-canvas-node-input': 'note',
+      className: 'cvxCanvasNodeTextInput nodrag nowheel',
+      placeholder: '写下分镜、对白或提示词…',
+      value: 'Before',
+    })
+
+    const onFocus = (element.props as { onFocus: () => void }).onFocus
+    onFocus()
+    expect(props.actions.focus).toHaveBeenCalledOnce()
 
     const onChange = (element.props as { onChange: (event: ChangeEvent<HTMLTextAreaElement>) => void }).onChange
     onChange({ currentTarget: { value: 'After' } } as ChangeEvent<HTMLTextAreaElement>)
@@ -146,10 +155,13 @@ describe('canvas builtins Client lifecycle', () => {
     const ctx = new Context()
     const registry = new FakeRendererRegistry()
     const builtins = ctx.plugin(Client)
-    expect(builtins.state).toBe(FIBER_PENDING)
+    await builtins
+    expect(builtins.state).toBe(FIBER_ACTIVE)
+    expect(Client.inject).toEqual([])
+    expect(registry.nodes.size).toBe(0)
 
     const firstProvider = await ctx.plugin(provider(registry))
-    await builtins
+    await vi.waitFor(() => expect(registry.nodes.size).toBe(2))
     expect(builtins.state).toBe(FIBER_ACTIVE)
     expect([...registry.nodes.keys()].sort()).toEqual(['comic.image@1', 'comic.note@1'])
     expect([...registry.edges.keys()]).toEqual(['comic.sequence@1'])
@@ -157,14 +169,13 @@ describe('canvas builtins Client lifecycle', () => {
     expect(registry.edges.get('comic.sequence@1')?.renderer).toBe(Client.ComicSequenceRenderer)
 
     await firstProvider.dispose()
-    await vi.waitFor(() => expect(builtins.state).toBe(FIBER_PENDING))
-    expect(registry.nodes.size).toBe(0)
+    await vi.waitFor(() => expect(registry.nodes.size).toBe(0))
+    expect(builtins.state).toBe(FIBER_ACTIVE)
     expect(registry.edges.size).toBe(0)
     expect(registry.disposals).toEqual(['comic.sequence@1', 'comic.image@1', 'comic.note@1'])
 
     const restoredProvider = await ctx.plugin(provider(registry))
-    await builtins
-    expect(registry.nodes.size).toBe(2)
+    await vi.waitFor(() => expect(registry.nodes.size).toBe(2))
     expect(registry.edges.size).toBe(1)
 
     await builtins.dispose()
