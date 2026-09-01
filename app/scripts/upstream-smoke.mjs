@@ -63,7 +63,6 @@ async function launch(profile) {
     env: {
       ...process.env,
       CONVAX_CONTROL_TOKEN: token,
-      CONVAX_PROFILE: profile,
       CONVAX_PROJECTS_HOME: productData,
       DSH_HOME: harnessHome,
       DSH_TELEMETRY_DISABLED: '1',

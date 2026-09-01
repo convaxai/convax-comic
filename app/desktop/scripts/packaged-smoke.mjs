@@ -176,7 +176,6 @@ terminal.onExit(event => {
     cwd: launchRoot,
     env: {
       CONVAX_CONTROL_TOKEN: token,
-      CONVAX_PROFILE: 'default',
       CONVAX_PROJECTS_HOME: productData,
       DSH_HOME: harnessHome,
       DSH_TELEMETRY_DISABLED: '1',

@@ -60,8 +60,6 @@
 
     - id: app-desktop-host
       name: '@convax/desktop'
-      config:
-        profile: compatibility
 
     # Host-only shared database capability; it opens no database until a
     # product plugin acquires an owner-scoped lease.

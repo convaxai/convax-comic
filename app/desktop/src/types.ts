@@ -1,6 +1,5 @@
 export const CONTROL_TOKEN_ENV = 'CONVAX_CONTROL_TOKEN'
 export const CONTROL_TOKEN_HEADER = 'x-convax-control-token'
-export const PROFILE_ENV = 'CONVAX_PROFILE'
 
 export const DESKTOP_IPC = Object.freeze({
   getLaunchContext: 'convax:get-launch-context',
@@ -41,17 +40,6 @@ export interface ReadyMessage {
 export interface StartupFailureMessage {
   readonly type: 'convax:startup-failed'
   readonly message: string
-}
-
-export interface DesktopStateMessage {
-  readonly type: 'convax:desktop-state'
-  readonly origin: string | null
-  readonly profile: DesktopProfile
-  readonly ready: boolean
-}
-
-export interface DesktopStateQuery {
-  readonly type: 'convax:desktop-query'
 }
 
 declare global {

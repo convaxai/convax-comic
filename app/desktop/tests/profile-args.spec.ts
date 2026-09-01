@@ -71,12 +71,12 @@ describe('desktop data boundaries', () => {
       { PATH: '/bin', ELECTRON_RUN_AS_NODE: '1' },
       't'.repeat(43),
       paths,
-      'compatibility',
     )
-    expect(env.DSH_HOME).toBe(join(paths.userData, 'harness'))
-    expect(env.CONVAX_PROJECTS_HOME).toBe(join(paths.userData, 'projects'))
-    expect(env.CONVAX_PROFILE).toBe('compatibility')
-    expect(env.CONVAX_CONTROL_TOKEN).toBe('t'.repeat(43))
-    expect(env).not.toHaveProperty('ELECTRON_RUN_AS_NODE')
+    expect(env).toEqual({
+      PATH: '/bin',
+      CONVAX_CONTROL_TOKEN: 't'.repeat(43),
+      DSH_HOME: join(paths.userData, 'harness'),
+      CONVAX_PROJECTS_HOME: join(paths.userData, 'projects'),
+    })
   })
 })

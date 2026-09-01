@@ -7,10 +7,10 @@ Client UI 覆盖。
 bootstrap 在任何 session 或产品目录初始化前把应用名与 `userData` 根固定为
 `Convax Comic`，与其他 Convax 产品的数据目录隔离。
 
-## 私有 Host 服务
+## Host 生命周期
 
-插件提供 `appDesktop`。服务只读暴露当前命名 profile、当前 loopback origin 和
-readiness；它是产品内部服务，未承诺为第三方插件 API。该包没有 `dsh.client`
+Host 插件只保留父进程 IPC 断开时进入 `SIGTERM` disposal 的第二层生命周期防线；
+预加载的 parent guard 仍在 DSH 入口执行前提供第一层防线。该包没有 `dsh.client`
 声明，因此 `compatibility` profile 不会获得任何桌面 UI slot 覆盖。
 
 ## Preload 暴露面
