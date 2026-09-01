@@ -31,6 +31,7 @@ const NOISY_DIRECTORIES = new Set([
 ])
 const COALESCE_MS = 75
 const DEFAULT_LIMIT = 250
+const LSTAT_CONCURRENCY = 32
 
 const IMAGE_MIME_TYPES: Readonly<Record<string, string>> = Object.freeze({
   '.gif': 'image/gif',
@@ -124,8 +125,9 @@ interface WorkspaceWatchState {
   readonly ring: InvalidationRecord[]
   readonly waiters: Set<Waiter>
   readonly coalescer: InvalidationCoalescer
-  watcher: WatcherLike | undefined
-  opening: Promise<void> | undefined
+  readonly watchers: Map<string, WatcherLike>
+  readonly openingWatchers: Map<string, Promise<void>>
+  readonly lifecycle: AbortController
   sequence: number
   closing: boolean
 }
@@ -227,23 +229,24 @@ export class ProjectFilesManager {
     }
     await this.#assertNoSymlinkAncestor(lease.state, request.path)
     const target = await this.#resolveContained(lease.state, request.path)
-    const info = await this.#fs.stat(target, this.#lifecycle.signal)
+    const info = await this.#fs.stat(target, lease.state.lifecycle.signal)
     if (info?.type !== 'directory') throw new ProjectFilesError('NOT_DIRECTORY', 'project path is not a directory')
-    const children = await this.#fs.listDir(target, this.#lifecycle.signal)
-    const entries: ProjectFileEntry[] = []
-    for (const child of children) {
-      const path = joinProjectPath(request.path, child.name)
-      if (isNoisyRelative(path)) continue
-      const pathInfo = await this.#fs.lstat(path, { cwd: lease.state.rootPath }, this.#lifecycle.signal)
+    await this.#ensureWatcher(lease.state, request.path, this.#fs.processPath(target))
+    const children = await this.#fs.listDir(target, lease.state.lifecycle.signal)
+    const visibleChildren = children
+      .map(child => ({ child, path: joinProjectPath(request.path, child.name) }))
+      .filter(({ path }) => !isNoisyRelative(path))
+    const entries = await mapConcurrent(visibleChildren, LSTAT_CONCURRENCY, async ({ child, path }): Promise<ProjectFileEntry> => {
+      const pathInfo = await this.#fs.lstat(path, { cwd: lease.state.rootPath }, lease.state.lifecycle.signal)
       const kind = pathInfo?.type === 'symlink' ? 'symlink' : child.type
-      entries.push({
+      return {
         name: child.name,
         path,
         kind,
         expandable: kind === 'directory',
         ...(kind === 'file' && child.size !== undefined ? { size: child.size } : {}),
-      })
-    }
+      }
+    })
     entries.sort(compareEntries)
     return {
       path: request.path,
@@ -394,15 +397,12 @@ export class ProjectFilesManager {
     if (!isAbsolute(rootPath)) throw new ProjectFilesError('WORKSPACE_UNAVAILABLE', 'workspace has no local canonical process path')
     const state = this.#createState(workspaceId, rootPath, rootTarget)
     this.#states.set(workspaceId, state)
-    state.opening = this.#openWatcher(state)
     try {
-      await state.opening
+      await this.#ensureWatcher(state, '', rootPath)
       return state
     } catch (error) {
       await this.#closeState(state)
       throw error
-    } finally {
-      state.opening = undefined
     }
   }
 
@@ -414,25 +414,51 @@ export class ProjectFilesManager {
       leases: new Set<string>(),
       ring: [],
       waiters: new Set<Waiter>(),
+      watchers: new Map<string, WatcherLike>(),
+      openingWatchers: new Map<string, Promise<void>>(),
+      lifecycle: new AbortController(),
       sequence: 0,
       closing: false,
-      watcher: undefined,
-      opening: undefined,
       coalescer: undefined as unknown as InvalidationCoalescer,
     } satisfies WorkspaceWatchState
     state.coalescer = new InvalidationCoalescer(paths => { this.#commit(state, paths, false) }, this.#coalesceMs)
     return state
   }
 
-  async #openWatcher(state: WorkspaceWatchState): Promise<void> {
-    const watcher = this.#watcherFactory(state.rootPath, path => {
-      const rel = relative(state.rootPath, resolve(path))
+  async #ensureWatcher(state: WorkspaceWatchState, path: string, watchPath: string): Promise<void> {
+    if (state.closing || state.lifecycle.signal.aborted) {
+      throw new ProjectFilesError('LEASE_CLOSED', 'project file lease closed')
+    }
+    const opening = state.openingWatchers.get(path)
+    if (opening !== undefined) return opening
+    if (state.watchers.has(path)) return
+    if (!isAbsolute(watchPath)) throw new ProjectFilesError('WORKSPACE_UNAVAILABLE', 'project directory has no local canonical process path')
+
+    const watcher = this.#watcherFactory(watchPath, candidate => {
+      const rel = relative(state.rootPath, resolve(candidate))
       return rel !== '' && (isOutside(rel) || isNoisyRelative(toWirePath(rel)))
     })
-    state.watcher = watcher
+    state.watchers.set(path, watcher)
+    const task = this.#openWatcher(state, path, watcher).catch(async (error: unknown) => {
+      if (state.watchers.get(path) === watcher) {
+        state.watchers.delete(path)
+        try { await watcher.close() } catch (closeError) {
+          this.#ctx.logger.warn(closeError instanceof Error ? closeError : new Error(String(closeError)))
+        }
+      }
+      throw error
+    }).finally(() => {
+      if (state.openingWatchers.get(path) === task) state.openingWatchers.delete(path)
+    })
+    state.openingWatchers.set(path, task)
+    return task
+  }
+
+  async #openWatcher(state: WorkspaceWatchState, path: string, watcher: WatcherLike): Promise<void> {
     await new Promise<void>((resolveReady, reject) => {
       let settled = false
-      const signal = this.#lifecycle.signal
+      const signal = state.lifecycle.signal
+      const ownsWatcher = (): boolean => state.watchers.get(path) === watcher
       const finish = (operation: () => void): void => {
         if (settled) return
         settled = true
@@ -443,15 +469,15 @@ export class ProjectFilesManager {
       const fail = (error: unknown): void => {
         if (!settled) {
           finish(() => { reject(error) })
-        } else if (!state.closing) {
+        } else if (!state.closing && ownsWatcher()) {
           this.#commit(state, [''], true)
         }
       }
       signal.addEventListener('abort', onAbort, { once: true })
       watcher.on('error', fail)
-      watcher.on('all', (_event, path) => {
-        if (state.closing) return
-        const parent = relativeParent(state.rootPath, path)
+      watcher.on('all', (_event, eventPath) => {
+        if (state.closing || !ownsWatcher()) return
+        const parent = relativeParent(state.rootPath, eventPath)
         if (parent === undefined) {
           this.#commit(state, [''], true)
           return
@@ -461,8 +487,7 @@ export class ProjectFilesManager {
       watcher.on('ready', () => { finish(resolveReady) })
       if (signal.aborted) onAbort()
     })
-    if (this.#closing || state.closing) {
-      await watcher.close()
+    if (this.#closing || state.closing || state.watchers.get(path) !== watcher) {
       throw new ProjectFilesError('CLOSED', 'project files service disposed while opening watcher')
     }
   }
@@ -472,25 +497,27 @@ export class ProjectFilesManager {
     state.closing = true
     if (this.#states.get(state.workspaceId) === state) this.#states.delete(state.workspaceId)
     state.coalescer.close()
+    state.lifecycle.abort(new ProjectFilesError('LEASE_CLOSED', 'project file lease closed'))
     for (const leaseId of state.leases) this.#leases.delete(leaseId)
     state.leases.clear()
     for (const waiter of [...state.waiters]) {
       waiter.cleanup()
       waiter.reject(new ProjectFilesError('LEASE_CLOSED', 'project file lease closed'))
     }
-    const watcher = state.watcher
-    state.watcher = undefined
-    if (watcher !== undefined) {
+    const watchers = [...state.watchers.values()]
+    state.watchers.clear()
+    state.openingWatchers.clear()
+    await Promise.all(watchers.map(async watcher => {
       try {
         await watcher.close()
       } catch (error) {
         this.#ctx.logger.warn(error instanceof Error ? error : new Error(String(error)))
       }
-    }
+    }))
   }
 
   async #assertNoSymlinkAncestor(state: WorkspaceWatchState, path: string): Promise<void> {
-    await this.#assertNoSymlinkPath(state.rootPath, path, this.#lifecycle.signal)
+    await this.#assertNoSymlinkPath(state.rootPath, path, state.lifecycle.signal)
   }
 
   async #assertNoSymlinkPath(rootPath: string, path: string, signal: AbortSignal): Promise<void> {
@@ -507,7 +534,7 @@ export class ProjectFilesManager {
   async #resolveContained(state: WorkspaceWatchState, path: string): Promise<ProjectFsTarget> {
     const target = path === ''
       ? state.rootTarget
-      : await this.#fs.resolve(path, { cwd: state.rootPath, signal: this.#lifecycle.signal })
+      : await this.#fs.resolve(path, { cwd: state.rootPath, signal: state.lifecycle.signal })
     if (!this.#fs.contains(state.rootTarget, target)) {
       throw new ProjectFilesError('PATH_ESCAPE', 'project path escapes the workspace')
     }
@@ -563,6 +590,7 @@ function defaultWatcherFactory(root: string, ignored: (path: string) => boolean)
     ignoreInitial: true,
     followSymlinks: false,
     atomic: true,
+    depth: 0,
     ignored,
   }) as FSWatcher
 }
@@ -609,6 +637,25 @@ function isOutside(path: string): boolean {
 function isNoisyRelative(path: string): boolean {
   if (path === '') return false
   return path.split('/').some(segment => NOISY_DIRECTORIES.has(segment))
+}
+
+async function mapConcurrent<T, U>(
+  values: readonly T[],
+  concurrency: number,
+  operation: (value: T) => Promise<U>,
+): Promise<U[]> {
+  const results = new Array<U>(values.length)
+  let nextIndex = 0
+  const workers = Array.from({ length: Math.min(concurrency, values.length) }, async () => {
+    while (true) {
+      const index = nextIndex
+      nextIndex += 1
+      if (index >= values.length) return
+      results[index] = await operation(values[index]!)
+    }
+  })
+  await Promise.all(workers)
+  return results
 }
 
 function compareText(left: string, right: string): number {

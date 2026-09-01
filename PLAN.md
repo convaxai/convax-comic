@@ -138,8 +138,9 @@ upstream.json       npm 运行版本与外部源码 commit 映射
   重新校验 Workspace、相对路径、逐段 symlink、`resolve/contains`、文件类型与大小，
   并以有界 `ctx.fs.readBytes` 返回受支持的 UTF-8 文本或 PNG/JPEG/GIF/WebP；浏览器
   不接触绝对路径、Host target 或任意 `file:` URL。Chokidar `followSymlinks:false`
-  只发送批量失效提示，目录项仍以 `ctx.fs` 重读为准；Client 懒加载展开分支、虚拟化可见行，并在序列缺口、
-  watcher 错误或恢复焦点时 reset/refetch。删除后以同一路径重新注册会获得新的
+  只为根目录和 Client 已加载目录建立 `depth:0` 一层监听并发送批量失效提示，目录项仍以
+  `ctx.fs` 重读为准；Client 懒加载展开分支、虚拟化可见行，并在序列缺口、watcher 错误
+  或恢复焦点时 reset/refetch。删除后以同一路径重新注册会获得新的
   DSH UUID，C1 不自动别名或迁移旧 Canvas；这类 orphan/rebind 归 C2 项目目录
   catalog 与显式迁移流程处理。
 - Canvas 使用严格的 `schemaVersion: 2` Contract：项目与文档各自带 revision，
@@ -148,8 +149,9 @@ upstream.json       npm 运行版本与外部源码 commit 映射
   Host 的 `ctx.canvasHost` 是唯一权威，执行叶级 Patch、文档/project 双重 CAS、
   原子 active-canvas mutation 与 committed-after-persist 事件；Client 的
   `ctx.canvasClient` 使用乐观 overlay、串行写入、单一有界 waiter 和 session-only
-  undo/redo，经严格 Typert `canvasV2` namespace 同步。旧 V1 payload 返回稳定的
-  `UNSUPPORTED_SCHEMA_VERSION`，没有自动迁移、JSON fallback 或双写。
+  undo/redo，经严格 Typert `canvasV2` namespace 同步；项目启动和画布切换直接复用
+  `getProject` 权威响应内的目标文档，避免紧接着重复全量读取同一项目 JSON。旧 V1
+  payload 返回稳定的 `UNSUPPORTED_SCHEMA_VERSION`，没有自动迁移、JSON fallback 或双写。
 - Canvas 交互以 Convax 的单一编辑态为基线：节点始终可选择、拖动和连线，
   不呈现 Hand/Select 工具状态；按住空格时临时以左键平移画布，编辑态中键仍
   可平移、左键框选。视图条提供适应视图、连线显隐、确定性横/纵整理、8px

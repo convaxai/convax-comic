@@ -262,7 +262,7 @@ export class CanvasProjectSync {
   async #startOnce(): Promise<void> {
     const project = await this.#getOrCreateProject()
     this.#assertActive()
-    const service = this.#createService(project.activeCanvasId)
+    const service = this.#createService(project.activeCanvasId, project.canvases[project.activeCanvasId])
     try {
       await service.start()
       this.#assertActive()
@@ -363,13 +363,14 @@ export class CanvasProjectSync {
     this.#project = undefined
   }
 
-  #createService(canvasId: CanvasId): CanvasClientService {
+  #createService(canvasId: CanvasId, initialDocument?: CanvasDocument): CanvasClientService {
     return new CanvasClientService(this.#port, {
       workspaceId: this.workspaceId,
       projectId: this.projectId,
       canvasId,
       clientId: `${this.clientId}:${canvasId}`,
       source: this.#source,
+      ...(initialDocument === undefined ? {} : { initialDocument }),
       renderers: this.renderers,
       ...(this.#revisionWaitMs === undefined ? {} : { revisionWaitMs: this.#revisionWaitMs }),
       ...(this.#fitView === undefined ? {} : { fitView: this.#fitView }),
@@ -383,7 +384,7 @@ export class CanvasProjectSync {
     }
     const old = this.#active()
     await old.flush()
-    const next = this.#createService(canvasId)
+    const next = this.#createService(canvasId, project.canvases[canvasId])
     try {
       await next.start()
       const workspace = this.workspace
