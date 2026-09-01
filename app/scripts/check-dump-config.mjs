@@ -115,6 +115,7 @@ function compareProfile(baselineOutput, productOutput, profile) {
   if (profile === 'default') {
     allowedChanges.add('ui-brand-official')
     allowedChanges.add('ui-layout')
+    allowedChanges.add('ui-settings-general')
     allowedChanges.add('ui-workspace')
   }
 
@@ -140,13 +141,8 @@ function compareProfile(baselineOutput, productOutput, profile) {
       if (baseline.rows.get(id) !== product.rows.get(id)) fail(`compatibility overrides client row ${id}`)
     }
   } else {
-    for (const id of ['ui-brand-official', 'ui-layout', 'ui-workspace']) {
+    for (const id of ['ui-brand-official', 'ui-layout', 'ui-settings-general', 'ui-workspace']) {
       assertOnlyDisabled(baseline, product, id)
-    }
-    const consumer = product.order.indexOf('app-test-consumer')
-    const provider = product.order.indexOf('app-runtime')
-    if (consumer === -1 || provider === -1 || consumer >= provider) {
-      fail('default does not exercise consumer-before-provider ordering')
     }
   }
   return changed

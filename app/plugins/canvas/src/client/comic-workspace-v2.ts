@@ -19,6 +19,7 @@ import {
   type CanvasMediaPolicy,
   type CanvasMoveNodeInput,
   type CanvasObjectUrlApi,
+  type CanvasProjectFileReader,
   type CanvasSelection,
   type CanvasUpdateNodePatch,
   type ComicCanvasDocumentProjection as ComicCanvasDocumentBaseProjection,
@@ -102,6 +103,7 @@ export interface ComicCanvasWorkspaceOptions {
   readonly createId?: (kind: CanvasIdKind) => string
   readonly objectUrl?: CanvasObjectUrlApi
   readonly resolveAssetUrl?: (assetId: string) => string | undefined
+  readonly readProjectFile?: CanvasProjectFileReader
   readonly mediaPolicy?: Partial<{
     readonly image: Partial<CanvasMediaPolicy['image']>
   }>
@@ -257,6 +259,16 @@ function inputFiles(input: CanvasFileCollection): File[] {
   return result
 }
 
+function decodeBase64(value: string): Uint8Array {
+  if (value.length % 4 !== 0 || !/^[A-Za-z0-9+/]*={0,2}$/u.test(value)) {
+    throw new TypeError('Project image content is not valid base64')
+  }
+  const binary = atob(value)
+  const bytes = new Uint8Array(binary.length)
+  for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index)
+  return bytes
+}
+
 function defaultSize(kind: 'note' | 'image'): ComicCanvasSize {
   return kind === 'note' ? { width: 280, height: 180 } : { width: 320, height: 240 }
 }
@@ -271,8 +283,10 @@ export class ComicCanvasWorkspace {
   readonly #createId: (kind: CanvasIdKind) => string
   readonly #objectUrl: CanvasObjectUrlApi
   readonly #resolveAssetUrl: ((assetId: string) => string | undefined) | undefined
+  readonly #readProjectFile: CanvasProjectFileReader | undefined
   readonly #mediaPolicy: CanvasMediaPolicy
   readonly #disposeService: boolean
+  readonly #lifecycle = new AbortController()
   readonly #temporaryAssets = new Map<string, TemporaryAsset>()
   readonly #listeners = new Set<() => void>()
   readonly #pending = new Set<Promise<void>>()
@@ -289,6 +303,7 @@ export class ComicCanvasWorkspace {
     this.#createId = options.createId ?? defaultId
     this.#objectUrl = options.objectUrl ?? defaultObjectUrl()
     this.#resolveAssetUrl = options.resolveAssetUrl
+    this.#readProjectFile = options.readProjectFile
     this.#disposeService = options.disposeService ?? true
     this.#mediaPolicy = {
       image: {
@@ -328,6 +343,10 @@ export class ComicCanvasWorkspace {
 
   get sessionId(): string {
     return this.#service.clientId
+  }
+
+  get workspaceId(): string {
+    return this.#service.workspaceId
   }
 
   getV2Node(id: string): CanvasNode | undefined {
@@ -653,6 +672,28 @@ export class ComicCanvasWorkspace {
     return this.#temporaryAssets.get(source.assetId)?.url ?? this.#resolveAssetUrl?.(source.assetId)
   }
 
+  async addProjectFile(path: string, position: ComicCanvasPoint): Promise<string[]> {
+    this.#assertActive()
+    const reader = this.#readProjectFile
+    if (reader === undefined) throw new Error('Project file import is unavailable')
+    const service = this.#service
+    const content = await reader(path, this.#lifecycle.signal)
+    this.#assertActive()
+    if (service !== this.#service) throw new Error('Canvas changed before the project file could be added')
+    this.#lifecycle.signal.throwIfAborted()
+    if (content.path !== path) throw new TypeError('Project file response path does not match the requested path')
+    if (content.kind === 'text') {
+      const id = this.createNode({ kind: 'note', position, title: content.name, text: content.text })
+      return [id]
+    }
+    const bytes = decodeBase64(content.dataBase64)
+    if (bytes.byteLength !== content.size) throw new TypeError('Project image response size does not match its content')
+    const buffer = new ArrayBuffer(bytes.byteLength)
+    new Uint8Array(buffer).set(bytes)
+    const file = new File([buffer], content.name, { type: content.mimeType })
+    return this.addDroppedFiles([file], position)
+  }
+
   async addDroppedFiles(files: CanvasFileCollection, position: ComicCanvasPoint): Promise<string[]> {
     this.#assertActive()
     const batch = inputFiles(files)
@@ -703,6 +744,7 @@ export class ComicCanvasWorkspace {
   dispose(): void {
     if (this.#disposed) return
     this.#disposed = true
+    this.#lifecycle.abort(new Error('Comic Canvas workspace disposed'))
     this.#unsubscribeState()
     for (const asset of this.#temporaryAssets.values()) this.#objectUrl.revokeObjectURL(asset.url)
     this.#temporaryAssets.clear()

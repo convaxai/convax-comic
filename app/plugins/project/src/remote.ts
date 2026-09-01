@@ -7,6 +7,8 @@ import type {
   ListProjectFilesResult,
   OpenProjectFilesRequest,
   OpenProjectFilesResult,
+  ReadProjectFileRequest,
+  ReadProjectFileResult,
   WaitProjectFilesRequest,
   WaitProjectFilesResult,
 } from './contracts.js'
@@ -17,6 +19,7 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
   interface TypertRemoteMap {
     'projectFiles/open': (request: OpenProjectFilesRequest) => Promise<RemoteResult<OpenProjectFilesResult>>
     'projectFiles/list': (request: ListProjectFilesRequest) => Promise<RemoteResult<ListProjectFilesResult>>
+    'projectFiles/read': (request: ReadProjectFileRequest, signal: AbortSignal) => Promise<RemoteResult<ReadProjectFileResult>>
     'projectFiles/wait': (request: WaitProjectFilesRequest, signal: AbortSignal) => Promise<RemoteResult<WaitProjectFilesResult>>
     'projectFiles/close': (request: CloseProjectFilesRequest) => Promise<RemoteResult<CloseProjectFilesResult>>
   }
@@ -24,6 +27,7 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
     projectFiles: {
       open: TypertRemoteMap['projectFiles/open']
       list: TypertRemoteMap['projectFiles/list']
+      read: TypertRemoteMap['projectFiles/read']
       wait: TypertRemoteMap['projectFiles/wait']
       close: TypertRemoteMap['projectFiles/close']
     }
@@ -41,6 +45,9 @@ export class ProjectFilesRemoteService extends TypertRemoteService {
 
   open(request: OpenProjectFilesRequest): Promise<OpenProjectFilesResult> { return this.manager.open(request) }
   list(request: ListProjectFilesRequest): Promise<ListProjectFilesResult> { return this.manager.list(request) }
+  read(request: ReadProjectFileRequest, signal: AbortSignal): Promise<ReadProjectFileResult> {
+    return this.manager.read(request, signal)
+  }
   wait(request: WaitProjectFilesRequest, signal: AbortSignal): Promise<WaitProjectFilesResult> {
     return this.manager.wait(request, signal)
   }

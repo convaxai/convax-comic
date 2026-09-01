@@ -1,11 +1,14 @@
+import { Buffer } from 'node:buffer'
 import { randomUUID } from 'node:crypto'
-import { dirname, isAbsolute, relative, resolve, sep } from 'node:path'
+import { dirname, extname, isAbsolute, relative, resolve, sep } from 'node:path'
 import { watch, type FSWatcher } from 'chokidar'
 import type { Context } from '@deepseek-ai/cordis'
 import type { WorkspaceId, WorkspaceRegistry } from '@deepseek-ai/dsh-workspace'
 import {
   PROJECT_FILES_RESPONSE_CAP,
   PROJECT_FILES_RING_CAP,
+  PROJECT_IMAGE_IMPORT_MAX_BYTES,
+  PROJECT_TEXT_IMPORT_MAX_BYTES,
   ProjectFilesError,
   assertProjectRelativePath,
   joinProjectPath,
@@ -15,6 +18,8 @@ import {
   type OpenProjectFilesRequest,
   type OpenProjectFilesResult,
   type ProjectFileEntry,
+  type ReadProjectFileRequest,
+  type ReadProjectFileResult,
   type WaitProjectFilesRequest,
   type WaitProjectFilesResult,
 } from '../contracts.js'
@@ -27,6 +32,43 @@ const NOISY_DIRECTORIES = new Set([
 const COALESCE_MS = 75
 const DEFAULT_LIMIT = 250
 
+const IMAGE_MIME_TYPES: Readonly<Record<string, string>> = Object.freeze({
+  '.gif': 'image/gif',
+  '.jpeg': 'image/jpeg',
+  '.jpg': 'image/jpeg',
+  '.png': 'image/png',
+  '.webp': 'image/webp',
+})
+const TEXT_MIME_TYPES: Readonly<Record<string, string>> = Object.freeze({
+  '.c': 'text/plain',
+  '.cc': 'text/plain',
+  '.cpp': 'text/plain',
+  '.css': 'text/css',
+  '.csv': 'text/csv',
+  '.go': 'text/plain',
+  '.h': 'text/plain',
+  '.hpp': 'text/plain',
+  '.html': 'text/html',
+  '.java': 'text/plain',
+  '.js': 'text/javascript',
+  '.json': 'application/json',
+  '.jsx': 'text/javascript',
+  '.md': 'text/markdown',
+  '.markdown': 'text/markdown',
+  '.mjs': 'text/javascript',
+  '.py': 'text/plain',
+  '.rs': 'text/plain',
+  '.sh': 'text/plain',
+  '.sql': 'text/plain',
+  '.toml': 'text/plain',
+  '.ts': 'text/typescript',
+  '.tsx': 'text/typescript',
+  '.txt': 'text/plain',
+  '.xml': 'application/xml',
+  '.yaml': 'application/yaml',
+  '.yml': 'application/yaml',
+})
+
 export interface ProjectFsTarget {
   readonly targetKey: unknown
   readonly displayPath: string
@@ -38,6 +80,7 @@ export interface ProjectFileSystem {
   contains(parent: ProjectFsTarget, child: ProjectFsTarget): boolean
   stat(target: ProjectFsTarget, signal?: AbortSignal): Promise<{ readonly type: 'file' | 'directory' | 'other'; readonly size?: number } | undefined>
   lstat(path: string, options?: { cwd?: string }, signal?: AbortSignal): Promise<{ readonly type: 'file' | 'directory' | 'symlink' | 'other'; readonly size?: number } | undefined>
+  readBytes(target: ProjectFsTarget, signal: AbortSignal | undefined, maxBytes: number): Promise<Uint8Array>
   listDir(target: ProjectFsTarget, signal?: AbortSignal): Promise<Array<{
     readonly name: string
     readonly type: 'file' | 'directory' | 'other'
@@ -208,6 +251,69 @@ export class ProjectFilesManager {
       entries: entries.slice(0, limit),
       truncated: entries.length > limit,
     }
+  }
+
+  async read(request: ReadProjectFileRequest, signal: AbortSignal): Promise<ReadProjectFileResult> {
+    this.#assertOpen()
+    if (typeof request.workspaceId !== 'string' || request.workspaceId.length === 0 || request.workspaceId.length > 256) {
+      throw new ProjectFilesError('INVALID_WORKSPACE', 'workspaceId is invalid')
+    }
+    assertProjectRelativePath(request.path)
+    if (request.path === '') throw new ProjectFilesError('NOT_FILE', 'project path must name a file')
+    if (isNoisyRelative(request.path)) throw new ProjectFilesError('PATH_IGNORED', 'project path is not readable')
+
+    const activeSignal = AbortSignal.any([this.#lifecycle.signal, signal])
+    const workspace = this.#workspaces.get(request.workspaceId as WorkspaceId)
+    if (workspace === undefined) throw new ProjectFilesError('WORKSPACE_NOT_FOUND', 'workspace does not exist')
+    await this.#assertNoSymlinkPath(workspace.path, request.path, activeSignal)
+    const rootTarget = await this.#fs.resolve(workspace.path, { signal: activeSignal })
+    const target = await this.#fs.resolve(request.path, { cwd: workspace.path, signal: activeSignal })
+    if (!this.#fs.contains(rootTarget, target)) throw new ProjectFilesError('PATH_ESCAPE', 'project path escapes the workspace')
+    const info = await this.#fs.stat(target, activeSignal)
+    if (info?.type !== 'file') throw new ProjectFilesError('NOT_FILE', 'project path is not a regular file')
+    const extension = extname(request.path).toLocaleLowerCase('en-US')
+    const imageMimeType = IMAGE_MIME_TYPES[extension]
+    const textMimeType = TEXT_MIME_TYPES[extension]
+    if (imageMimeType === undefined && textMimeType === undefined) {
+      throw new ProjectFilesError('UNSUPPORTED_FILE_TYPE', 'only supported image and text files can be added to Canvas')
+    }
+    const kind = imageMimeType === undefined ? 'text' as const : 'image' as const
+    const mimeType = imageMimeType ?? textMimeType!
+    const maxBytes = kind === 'image' ? PROJECT_IMAGE_IMPORT_MAX_BYTES : PROJECT_TEXT_IMPORT_MAX_BYTES
+    if (info.size !== undefined && info.size > maxBytes) {
+      throw new ProjectFilesError('FILE_TOO_LARGE', `project file exceeds the ${maxBytes} byte Canvas import limit`)
+    }
+
+    let bytes: Uint8Array
+    try {
+      bytes = await this.#fs.readBytes(target, activeSignal, maxBytes)
+    } catch (error) {
+      if (isErrorCode(error, 'FS_TOO_LARGE')) {
+        throw new ProjectFilesError('FILE_TOO_LARGE', `project file exceeds the ${maxBytes} byte Canvas import limit`)
+      }
+      throw error
+    }
+    const name = request.path.split('/').at(-1)!
+    if (kind === 'image') {
+      if (!matchesImageSignature(bytes, mimeType)) {
+        throw new ProjectFilesError('INVALID_IMAGE', 'project image content does not match its supported file type')
+      }
+      return {
+        kind, path: request.path, name, size: bytes.byteLength, mimeType,
+        dataBase64: Buffer.from(bytes).toString('base64'),
+      }
+    }
+    let text: string
+    try {
+      text = new TextDecoder('utf-8', { fatal: true }).decode(bytes)
+    } catch {
+      throw new ProjectFilesError('INVALID_TEXT_ENCODING', 'project text file must be valid UTF-8')
+    }
+    if (text.includes('\0')) throw new ProjectFilesError('INVALID_TEXT_ENCODING', 'project text file cannot contain NUL bytes')
+    if (text.length > PROJECT_TEXT_IMPORT_MAX_BYTES) {
+      throw new ProjectFilesError('FILE_TOO_LARGE', `project text exceeds the ${PROJECT_TEXT_IMPORT_MAX_BYTES} character Canvas note limit`)
+    }
+    return { kind, path: request.path, name, size: bytes.byteLength, mimeType, text }
   }
 
   wait(request: WaitProjectFilesRequest, signal: AbortSignal): Promise<WaitProjectFilesResult> {
@@ -384,13 +490,17 @@ export class ProjectFilesManager {
   }
 
   async #assertNoSymlinkAncestor(state: WorkspaceWatchState, path: string): Promise<void> {
+    await this.#assertNoSymlinkPath(state.rootPath, path, this.#lifecycle.signal)
+  }
+
+  async #assertNoSymlinkPath(rootPath: string, path: string, signal: AbortSignal): Promise<void> {
     if (path === '') return
     const segments = path.split('/')
     let current = ''
     for (const segment of segments) {
       current = current === '' ? segment : `${current}/${segment}`
-      const info = await this.#fs.lstat(current, { cwd: state.rootPath }, this.#lifecycle.signal)
-      if (info?.type === 'symlink') throw new ProjectFilesError('SYMLINK_NOT_EXPANDABLE', 'symbolic links cannot be expanded')
+      const info = await this.#fs.lstat(current, { cwd: rootPath }, signal)
+      if (info?.type === 'symlink') throw new ProjectFilesError('SYMLINK_NOT_EXPANDABLE', 'symbolic links cannot be read')
     }
   }
 
@@ -463,6 +573,29 @@ function relativeParent(root: string, path: string): string | undefined {
   if (isOutside(rel)) return undefined
   if (rel === '') return ''
   return toWirePath(dirname(rel) === '.' ? '' : dirname(rel))
+}
+
+function isErrorCode(error: unknown, code: string): boolean {
+  return typeof error === 'object' && error !== null && 'code' in error && error.code === code
+}
+
+function matchesImageSignature(bytes: Uint8Array, mimeType: string): boolean {
+  if (mimeType === 'image/png') {
+    return bytes.length >= 8
+      && bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47
+      && bytes[4] === 0x0d && bytes[5] === 0x0a && bytes[6] === 0x1a && bytes[7] === 0x0a
+  }
+  if (mimeType === 'image/jpeg') return bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff
+  if (mimeType === 'image/gif') {
+    const header = bytes.length >= 6 ? String.fromCharCode(...bytes.subarray(0, 6)) : ''
+    return header === 'GIF87a' || header === 'GIF89a'
+  }
+  if (mimeType === 'image/webp') {
+    return bytes.length >= 12
+      && String.fromCharCode(...bytes.subarray(0, 4)) === 'RIFF'
+      && String.fromCharCode(...bytes.subarray(8, 12)) === 'WEBP'
+  }
+  return false
 }
 
 function toWirePath(path: string): string {

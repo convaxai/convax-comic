@@ -17,7 +17,12 @@ import {
   CanvasClientService,
   type CanvasRemotePort,
 } from '../src/client/canvas-client-service.ts'
-import { CanvasFileError, type CanvasIdKind, type CanvasObjectUrlApi } from '../src/client/comic-ui-contract.ts'
+import {
+  CanvasFileError,
+  type CanvasIdKind,
+  type CanvasObjectUrlApi,
+  type CanvasProjectFileContent,
+} from '../src/client/comic-ui-contract.ts'
 
 function document(): CanvasDocument {
   return {
@@ -345,6 +350,52 @@ describe('ComicCanvasWorkspace temporary image media', () => {
     expect(workspace.getMediaPreviewUrl('image')).toBe('https://example.test/reference.png')
     workspace.dispose()
     expect(objectUrl.revoked).toEqual(['blob:comic-1', 'blob:comic-2'])
+  })
+
+  it('imports Host-validated project text and image files without persisting bytes or blob URLs', async () => {
+    const objectUrl = urls()
+    const readProjectFile: NonNullable<ComicCanvasWorkspaceOptions['readProjectFile']> = vi.fn(async (path): Promise<CanvasProjectFileContent> => {
+      if (path === 'notes/beat.md') {
+        return {
+          kind: 'text', path, name: 'beat.md', size: 12,
+          mimeType: 'text/markdown', text: 'Opening beat',
+        }
+      }
+      return {
+        kind: 'image', path, name: 'cover.png', size: 8, mimeType: 'image/png',
+        dataBase64: 'iVBORw0KGgo=',
+      }
+    })
+    const { service, workspace } = await setup({ objectUrl, readProjectFile })
+    const noteIds = await workspace.addProjectFile('notes/beat.md', { x: 40, y: 50 })
+    const imageIds = await workspace.addProjectFile('art/cover.png', { x: 400, y: 50 })
+    expect(workspace.getSnapshot().document.nodes).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: noteIds[0], kind: 'note', title: 'beat.md', text: 'Opening beat' }),
+      expect.objectContaining({ id: imageIds[0], kind: 'image', title: 'cover.png' }),
+    ]))
+    expect(workspace.getMediaPreviewUrl(imageIds[0]!)).toBe('blob:comic-1')
+    const serialized = JSON.stringify(service.getSnapshot())
+    expect(serialized).not.toContain('iVBORw0KGgo=')
+    expect(serialized).not.toContain('blob:comic-1')
+    expect(readProjectFile).toHaveBeenNthCalledWith(1, 'notes/beat.md', expect.any(AbortSignal))
+    expect(readProjectFile).toHaveBeenNthCalledWith(2, 'art/cover.png', expect.any(AbortSignal))
+    workspace.dispose()
+    expect(objectUrl.revoked).toEqual(['blob:comic-1'])
+  })
+
+  it('cancels an in-flight project file import when its project workspace is disposed', async () => {
+    let observedSignal: AbortSignal | undefined
+    const readProjectFile: NonNullable<ComicCanvasWorkspaceOptions['readProjectFile']> = (_path, signal) => {
+      observedSignal = signal
+      return new Promise((_resolve, reject) => {
+        signal.addEventListener('abort', () => { reject(signal.reason) }, { once: true })
+      })
+    }
+    const { workspace } = await setup({ readProjectFile })
+    const pending = workspace.addProjectFile('notes/late.md', { x: 0, y: 0 })
+    workspace.dispose()
+    expect(observedSignal?.aborted).toBe(true)
+    await expect(pending).rejects.toThrow(/disposed/u)
   })
 
   it('uses the persistent asset resolver without placing runtime URLs into V2', async () => {

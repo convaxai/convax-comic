@@ -1,3 +1,4 @@
+import type { ComicProjectScope } from '@convax/project/contracts'
 import type { Context } from '@deepseek-ai/cordis'
 import {
   CanvasCenter,
@@ -7,7 +8,7 @@ import {
   CanvasProjectSync,
   type CanvasRemoteV2Api,
 } from './project-sync-v2.js'
-import { TYPERT_REMOTE_V2 } from '../remote-v2.js'
+import { CANVAS_REMOTE_V2_CONTRIBUTION } from '../remote-v2-contract.js'
 
 interface SlotRegistrationOptions {
   readonly name: string
@@ -24,13 +25,8 @@ interface SlotRegistry {
 }
 
 interface ClientRemoteRoot {
-  $mount(contribution: typeof TYPERT_REMOTE_V2): Promise<() => void | Promise<void>>
+  $mount(contribution: typeof CANVAS_REMOTE_V2_CONTRIBUTION): Promise<() => void | Promise<void>>
   readonly canvasV2: CanvasRemoteV2Api
-}
-
-interface ComicProjectScope {
-  readonly workspaceId: string
-  readonly projectId: string
 }
 
 type ClientContext = Context & {
@@ -51,7 +47,7 @@ export const inject = ['slots', 'remote']
  * shell and sidebar; Cordis restarts this fiber when the active project changes.
  */
 export async function apply(ctx: ClientContext, config: Config = {}): Promise<() => Promise<void>> {
-  const disposeRemote = await ctx.remote.$mount(TYPERT_REMOTE_V2)
+  const disposeRemote = await ctx.remote.$mount(CANVAS_REMOTE_V2_CONTRIBUTION)
   try {
     ctx.inject(['remote.canvasV2', 'comicProject'], async (canvasCtx) => {
       const consumer = canvasCtx as ClientContext
@@ -62,7 +58,7 @@ export async function apply(ctx: ClientContext, config: Config = {}): Promise<()
       const sync = new CanvasProjectSync(consumer.remote.canvasV2, {
         workspaceId: scope.workspaceId,
         projectId: scope.projectId,
-        workspace: { initiallyOpen: true },
+        workspace: { initiallyOpen: true, readProjectFile: scope.readFile },
         ensureProject: {
           canvasId: config.canvasId ?? 'canvas:main',
           title: config.title ?? 'Untitled canvas',

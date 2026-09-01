@@ -2,6 +2,14 @@ import { defineConfig } from 'tsdown'
 
 const PACKAGE_NAME = '@convax/ui'
 
+function clientExternal(specifier: string): boolean {
+  return specifier === 'react'
+    || specifier.startsWith('react/')
+    || specifier === 'react-dom'
+    || specifier.startsWith('react-dom/')
+    || specifier.startsWith('@deepseek-ai/')
+}
+
 export default defineConfig([
   {
     name: PACKAGE_NAME,
@@ -27,12 +35,13 @@ export default defineConfig([
     clean: false,
     sourcemap: true,
     deps: {
-      alwaysBundle: ['@convax/beui/styles'],
-      neverBundle: [
-        'react',
-        '@deepseek-ai/cordis',
-        '@deepseek-ai/dsh-client-runtime/client',
-      ],
+      neverBundle: clientExternal,
+      alwaysBundle: (specifier: string) => !clientExternal(specifier),
+    },
+    define: {
+      'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV ?? 'production'),
+      'import.meta.env.MODE': JSON.stringify(process.env.NODE_ENV ?? 'production'),
+      'import.meta.env': JSON.stringify({ MODE: process.env.NODE_ENV ?? 'production' }),
     },
     outputOptions: {
       entryFileNames: 'client.js',

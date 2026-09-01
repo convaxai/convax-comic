@@ -6,6 +6,7 @@ import {
 } from '../src/client/Workbench.tsx'
 import { apply, inject as requiredServices } from '../src/client/index.ts'
 import type { ComicCanvasWorkspace } from '../src/client/comic-workspace-v2.ts'
+import { CANVAS_REMOTE_V2_CONTRIBUTION } from '../src/remote-v2-contract.ts'
 
 interface Registration {
   readonly options: {
@@ -94,6 +95,7 @@ describe('Canvas V2 Client plugin', () => {
       comicProject: {
         workspaceId: 'workspace:test',
         projectId: 'project:root',
+        readFile: vi.fn(),
       },
       provide(name: string, service: unknown): ReturnType<typeof vi.fn> {
         provided.set(name, service)
@@ -132,7 +134,7 @@ describe('Canvas V2 Client plugin', () => {
 
     const dispose = await apply(ctx as never)
     await injectedReady
-    expect(remote.$mount).toHaveBeenCalledOnce()
+    expect(remote.$mount).toHaveBeenCalledWith(CANVAS_REMOTE_V2_CONTRIBUTION)
     expect(waitForRevision).toHaveBeenCalledOnce()
     expect(provided.has('canvasClient')).toBe(true)
     expect(registrations).toHaveLength(2)

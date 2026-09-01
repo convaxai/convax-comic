@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import type { ProjectFileEntry } from '../src/contracts.js'
-import { ProjectEntryIcon } from '../src/client/icons.js'
+import { PanelRightIcon, ProjectEntryIcon } from '../src/client/icons.js'
 
 function entry(name: string, kind: ProjectFileEntry['kind']): ProjectFileEntry {
   return { name, path: name, kind, expandable: kind === 'directory' }
@@ -14,6 +14,14 @@ describe('Convax project tree icons', () => {
     expect(closed).toContain('cvxProjectIconFolder')
     expect(open).toContain('cvxProjectIconFolder')
     expect(open).not.toBe(closed)
+  })
+
+  it('mirrors the official filled panel glyph for the right sidebar', () => {
+    const panel = renderToStaticMarkup(<PanelRightIcon />)
+    expect(panel).toContain('viewBox="0 0 16 16"')
+    expect(panel).toContain('fill="currentColor"')
+    expect(panel).toContain('transform="translate(16 0) scale(-1 1)"')
+    expect(panel).not.toContain('<rect')
   })
 
   it('uses media and code colors while keeping documents muted', () => {

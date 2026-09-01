@@ -3,6 +3,8 @@ export type { ButtonLinkProps, ButtonProps, ButtonSize, ButtonVariant } from './
 export { FileTree, FileTreeFile, FileTreeFolder } from './file-tree.js'
 export { Input } from './input.js'
 export type { InputProps } from './input.js'
+export { Select } from './select.js'
+export type { SelectOption, SelectProps } from './select.js'
 export { Switch } from './switch.js'
 export type { SwitchProps } from './switch.js'
 export { Tabs, TabsContent, TabsList, TabsTrigger } from './tabs.js'

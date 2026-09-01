@@ -1,25 +1,26 @@
 export const BEUI_THEME_CSS = String.raw`
 body {
-  --cvx-beui-background: var(--dsw-alias-bg-base, #f7f8f6);
-  --cvx-beui-foreground: var(--dsw-alias-label-primary, #171a17);
-  --cvx-beui-card: var(--dsw-alias-bg-layer-1, #ffffff);
-  --cvx-beui-popover: var(--dsw-alias-bg-overlay, #ffffff);
-  --cvx-beui-primary: var(--dsw-alias-brand-primary, #5f7f00);
-  --cvx-beui-primary-foreground: #ffffff;
-  --cvx-beui-secondary: var(--dsw-alias-bg-layer-2, #f1f2ee);
-  --cvx-beui-muted: color-mix(in oklab, var(--cvx-beui-foreground) 6%, var(--cvx-beui-background));
-  --cvx-beui-muted-foreground: var(--dsw-alias-label-secondary, #697069);
-  --cvx-beui-accent: color-mix(in oklab, var(--cvx-beui-primary) 9%, var(--cvx-beui-card));
-  --cvx-beui-accent-strong: color-mix(in oklab, var(--cvx-beui-primary) 17%, var(--cvx-beui-card));
-  --cvx-beui-border: var(--dsw-alias-border-l1, #e3e6df);
-  --cvx-beui-border-strong: var(--dsw-alias-border-l2, #ced3ca);
+  --cvx-beui-background: var(--dsw-alias-bg-base, #ffffff);
+  --cvx-beui-foreground: var(--dsw-alias-label-primary, #18181b);
+  --cvx-beui-neutral-surface: color-mix(in oklab, var(--cvx-beui-foreground) 3%, var(--cvx-beui-background));
+  --cvx-beui-card: var(--cvx-beui-neutral-surface);
+  --cvx-beui-popover: var(--cvx-beui-neutral-surface);
+  --cvx-beui-primary: var(--dsw-alias-brand-primary, #18181b);
+  --cvx-beui-primary-foreground: var(--dsw-alias-label-primary-foreground, #ffffff);
+  --cvx-beui-secondary: var(--cvx-beui-neutral-surface);
+  --cvx-beui-muted: var(--cvx-beui-neutral-surface);
+  --cvx-beui-muted-foreground: var(--dsw-alias-label-secondary, #71717a);
+  --cvx-beui-accent: var(--cvx-beui-neutral-surface);
+  --cvx-beui-accent-strong: color-mix(in oklab, var(--cvx-beui-foreground) 7%, var(--cvx-beui-background));
+  --cvx-beui-border: var(--dsw-alias-border-l1, #e4e4e7);
+  --cvx-beui-border-strong: var(--dsw-alias-border-l2, #d4d4d8);
   --cvx-beui-danger: var(--dsw-alias-state-error-primary, #dc2626);
   --cvx-beui-success: var(--dsw-alias-state-success-primary, #16a34a);
   --cvx-beui-warning: var(--dsw-alias-state-warn-primary, #d97706);
-  --cvx-beui-ring: color-mix(in oklab, var(--cvx-beui-primary) 48%, transparent);
-  --cvx-beui-shadow-xs: 0 1px 2px rgb(17 24 17 / 5%);
-  --cvx-beui-shadow-sm: 0 2px 8px rgb(17 24 17 / 7%), 0 1px 2px rgb(17 24 17 / 5%);
-  --cvx-beui-shadow-md: 0 12px 32px rgb(17 24 17 / 11%), 0 2px 8px rgb(17 24 17 / 5%);
+  --cvx-beui-ring: color-mix(in oklab, var(--cvx-beui-foreground) 12%, transparent);
+  --cvx-beui-shadow-xs: 0 1px 2px rgb(24 24 27 / 5%);
+  --cvx-beui-shadow-sm: 0 2px 8px rgb(24 24 27 / 7%), 0 1px 2px rgb(24 24 27 / 5%);
+  --cvx-beui-shadow-md: 0 10px 15px -3px rgb(0 0 0 / 10%), 0 4px 6px -4px rgb(0 0 0 / 10%);
   --cvx-beui-radius-sm: 7px;
   --cvx-beui-radius-md: 10px;
   --cvx-beui-radius-lg: 14px;
@@ -34,10 +35,13 @@ body {
 }
 
 body[data-ds-dark-theme] {
-  --cvx-beui-primary-foreground: #11140d;
+  --cvx-beui-primary: var(--dsw-alias-brand-primary, #f4f4f5);
+  --cvx-beui-primary-foreground: var(--dsw-alias-label-primary-foreground, #18181b);
+  --cvx-beui-muted-foreground: color-mix(in oklab, var(--dsw-alias-label-secondary, #a1a1aa) 64%, var(--cvx-beui-background));
+  --cvx-beui-ring: color-mix(in oklab, var(--cvx-beui-foreground) 10%, transparent);
   --cvx-beui-shadow-xs: 0 1px 2px rgb(0 0 0 / 18%);
   --cvx-beui-shadow-sm: 0 3px 10px rgb(0 0 0 / 24%);
-  --cvx-beui-shadow-md: 0 16px 40px rgb(0 0 0 / 34%);
+  --cvx-beui-shadow-md: 0 10px 15px -3px rgb(0 0 0 / 10%), 0 4px 6px -4px rgb(0 0 0 / 10%);
 }
 
 body ::selection {
@@ -100,6 +104,27 @@ export const BEUI_COMPONENT_CSS = String.raw`
 .cvxBeuiRippleClip { position: absolute; z-index: 0; inset: 0; overflow: hidden; border-radius: inherit; pointer-events: none; }
 .cvxBeuiRipple { position: absolute; border-radius: 999px; color: currentColor; background: currentColor; pointer-events: none; }
 
+.cvxBeuiSelect { position: relative; min-width: 0; }
+.cvxBeuiSelectTrigger { position: relative; z-index: 10; appearance: none; display: flex; width: 100%; height: 38px; min-width: 0; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 12px; border: 1px solid var(--cvx-beui-border); border-radius: 12px; outline: none; color: var(--cvx-beui-foreground); background: var(--cvx-beui-background); font: inherit; font-size: 14px; font-weight: 400; line-height: 20px; text-align: left; cursor: pointer; transition: color var(--cvx-beui-fast) ease, border-color var(--cvx-beui-fast) ease, box-shadow var(--cvx-beui-fast) ease; -webkit-app-region: no-drag; }
+.cvxBeuiSelectTrigger:hover:not(:disabled) { border-color: var(--cvx-beui-border-strong); }
+.cvxBeuiSelectTrigger:focus-visible { box-shadow: 0 0 0 2px var(--cvx-beui-ring); }
+.cvxBeuiSelectTrigger:disabled { opacity: .5; pointer-events: none; }
+.cvxBeuiSelectValue { min-width: 0; overflow: hidden; color: var(--cvx-beui-foreground); text-overflow: ellipsis; white-space: nowrap; }
+.cvxBeuiSelectValue[data-placeholder="true"] { color: var(--cvx-beui-muted-foreground); }
+.cvxBeuiSelectChevron { display: grid; width: 16px; height: 16px; flex: 0 0 16px; place-items: center; color: var(--cvx-beui-muted-foreground); }
+.cvxBeuiSelectMenu { position: absolute; z-index: 20; right: 0; left: 0; box-sizing: border-box; border: 1px solid var(--cvx-beui-border); border-radius: 12px; background: var(--cvx-beui-background); box-shadow: var(--cvx-beui-shadow-md); }
+.cvxBeuiSelectMenu[data-placement="bottom"] { top: 100%; }
+.cvxBeuiSelectMenu[data-placement="top"] { bottom: 100%; }
+.cvxBeuiSelectList { padding: 4px; }
+.cvxBeuiSelectItem { display: block; }
+.cvxBeuiSelectOption { appearance: none; display: flex; width: 100%; min-width: 0; height: 32px; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 10px; border: 0; border-radius: 8px; outline: none; color: var(--cvx-beui-muted-foreground); background: transparent; font: inherit; font-size: 14px; font-weight: 400; line-height: 20px; text-align: left; cursor: pointer; transition: color var(--cvx-beui-fast) ease, background-color var(--cvx-beui-fast) ease; }
+.cvxBeuiSelectOption:hover, .cvxBeuiSelectOption[data-active="true"], .cvxBeuiSelectOption:focus-visible { color: var(--cvx-beui-foreground); background: var(--cvx-beui-muted); }
+.cvxBeuiSelectOption[aria-selected="true"] { color: var(--cvx-beui-foreground); background: var(--cvx-beui-muted); }
+.cvxBeuiSelectOption:disabled { opacity: .5; cursor: not-allowed; }
+.cvxBeuiSelectOptionLabel { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cvxBeuiSelectCheck { width: 14px; height: 14px; flex: 0 0 14px; color: currentColor; }
+.cvxBeuiSelectEmpty { padding: 12px 10px; color: var(--cvx-beui-muted-foreground); font-size: 13px; text-align: center; }
+
 .cvxBeuiFileTree {
   position: relative;
   display: flex;
@@ -137,6 +162,8 @@ export const BEUI_COMPONENT_CSS = String.raw`
 }
 .cvxBeuiFileTreeItem:hover, .cvxBeuiFileTreeItem.is-selected { color: var(--cvx-beui-foreground); }
 .cvxBeuiFileTreeItem:focus-visible { box-shadow: inset 0 0 0 2px var(--cvx-beui-ring); }
+.cvxBeuiFileTreeItem[draggable="true"] { cursor: grab; }
+.cvxBeuiFileTreeItem[draggable="true"]:active { cursor: grabbing; }
 .cvxBeuiFileTreeItem[aria-disabled="true"] { cursor: not-allowed; }
 .cvxBeuiFileTreeHover,
 .cvxBeuiFileTreeSelection { position: absolute; z-index: -2; inset: 0; border-radius: inherit; pointer-events: none; }

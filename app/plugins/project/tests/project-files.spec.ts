@@ -34,6 +34,12 @@ function harness() {
   const root = '/workspace/project'
   const directories = new Set([root, `${root}/src`])
   const links = new Set([`${root}/link`])
+  const files = new Map<string, Uint8Array>([
+    [`${root}/README.md`, new TextEncoder().encode('# Project\n')],
+    [`${root}/cover.png`, Uint8Array.of(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a)],
+    [`${root}/bad.png`, new TextEncoder().encode('not a png')],
+    [`${root}/archive.zip`, Uint8Array.of(0x50, 0x4b, 0x03, 0x04)],
+  ])
   const fs: ProjectFileSystem = {
     async resolve(path, options) {
       const absolute = path === 'escape'
@@ -49,15 +55,23 @@ function harness() {
     async stat(value) {
       const path = (value as Target).path
       if (directories.has(path)) return { type: 'directory' as const }
-      if (path === `${root}/README.md`) return { type: 'file' as const, size: 10 }
+      const bytes = files.get(path)
+      if (bytes !== undefined) return { type: 'file' as const, size: bytes.byteLength }
       return undefined
     },
     async lstat(path, options) {
       const absolute = posix.resolve(options?.cwd ?? '/', path)
       if (links.has(absolute)) return { type: 'symlink' as const }
       if (directories.has(absolute)) return { type: 'directory' as const }
-      if (absolute === `${root}/README.md`) return { type: 'file' as const, size: 10 }
+      const bytes = files.get(absolute)
+      if (bytes !== undefined) return { type: 'file' as const, size: bytes.byteLength }
       return undefined
+    },
+    async readBytes(value, _signal, maxBytes) {
+      const bytes = files.get((value as Target).path)
+      if (bytes === undefined) throw Object.assign(new Error('missing'), { code: 'ENOENT' })
+      if (bytes.byteLength > maxBytes) throw Object.assign(new Error('too large'), { code: 'FS_TOO_LARGE' })
+      return bytes.slice()
     },
     async listDir(value) {
       const path = (value as Target).path
@@ -98,6 +112,41 @@ describe('ProjectFilesManager', () => {
     await expect(manager.list({ leaseId: opened.leaseId, path: '../escape' })).rejects.toMatchObject({ code: 'INVALID_PATH' })
     await manager.closeLease(opened.leaseId)
     expect(watcher.closed).toBe(true)
+  })
+
+  it('reads supported text and image files through workspace-relative authority only', async () => {
+    const { manager } = harness()
+    await expect(manager.read(
+      { workspaceId: 'workspace-1', path: 'README.md' },
+      new AbortController().signal,
+    )).resolves.toEqual({
+      kind: 'text', path: 'README.md', name: 'README.md', size: 10,
+      mimeType: 'text/markdown', text: '# Project\n',
+    })
+    await expect(manager.read(
+      { workspaceId: 'workspace-1', path: 'cover.png' },
+      new AbortController().signal,
+    )).resolves.toMatchObject({
+      kind: 'image', path: 'cover.png', name: 'cover.png', size: 8,
+      mimeType: 'image/png', dataBase64: 'iVBORw0KGgo=',
+    })
+    await expect(manager.read(
+      { workspaceId: 'workspace-1', path: 'bad.png' },
+      new AbortController().signal,
+    )).rejects.toMatchObject({ code: 'INVALID_IMAGE' })
+    await expect(manager.read(
+      { workspaceId: 'workspace-1', path: 'archive.zip' },
+      new AbortController().signal,
+    )).rejects.toMatchObject({ code: 'UNSUPPORTED_FILE_TYPE' })
+    await expect(manager.read(
+      { workspaceId: 'workspace-1', path: 'link' },
+      new AbortController().signal,
+    )).rejects.toMatchObject({ code: 'SYMLINK_NOT_EXPANDABLE' })
+    await expect(manager.read(
+      { workspaceId: 'workspace-1', path: '../escape' },
+      new AbortController().signal,
+    )).rejects.toMatchObject({ code: 'INVALID_PATH' })
+    await manager.dispose()
   })
 
   it('converts observed writes into sequenced invalidations and aborts pending waits on close', async () => {

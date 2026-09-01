@@ -6,6 +6,7 @@ import {
   FileTreeFile,
   FileTreeFolder,
   Input,
+  Select,
   Switch,
   Tabs,
   TabsContent,
@@ -17,7 +18,7 @@ function treeMarkup(): string {
   return renderToStaticMarkup(
     <FileTree defaultValue="app/index.ts" defaultExpandedIds={["app"]} ariaLabel="Project files">
       <FileTreeFolder value="app" name="app">
-        <FileTreeFile value="app/index.ts" name="index.ts" />
+        <FileTreeFile value="app/index.ts" name="index.ts" draggable onDragStart={() => undefined} />
       </FileTreeFolder>
     </FileTree>,
   )
@@ -39,6 +40,23 @@ describe('BeUI source-owned primitives', () => {
     expect(markup).toContain('aria-expanded="true"')
     expect(markup).toContain('aria-selected="true"')
     expect(markup).toContain('index.ts')
+    expect(markup).toContain('draggable="true"')
+  })
+
+  it('renders an accessible motion select trigger', () => {
+    const select = renderToStaticMarkup(
+      <Select
+        ariaLabel="Active project"
+        value="story"
+        options={[{ value: 'story', label: 'Story' }, { value: 'draft', label: 'Draft' }]}
+        onValueChange={() => undefined}
+      />,
+    )
+    expect(select).toContain('cvxBeuiSelectTrigger')
+    expect(select).toContain('aria-haspopup="listbox"')
+    expect(select).toContain('aria-expanded="false"')
+    expect(select).toContain('Story')
+    expect(select).not.toContain('<select')
   })
 
   it('renders settings primitives with native accessibility semantics', () => {

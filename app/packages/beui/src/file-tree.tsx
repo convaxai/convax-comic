@@ -6,6 +6,7 @@ import {
   Children,
   Fragment,
   isValidElement,
+  type DragEvent,
   type KeyboardEvent,
   type ReactNode,
   useCallback,
@@ -33,6 +34,8 @@ interface FileTreeItem {
   readonly icon?: FileTreeIcon | undefined
   readonly disabled?: boolean | undefined
   readonly className?: string | undefined
+  readonly draggable?: boolean | undefined
+  readonly onDragStart?: ((event: DragEvent<HTMLButtonElement>) => void) | undefined
 }
 
 export interface FileTreeFolderProps {
@@ -50,6 +53,8 @@ export interface FileTreeFileProps {
   readonly icon?: FileTreeIcon
   readonly disabled?: boolean
   readonly className?: string
+  readonly draggable?: boolean
+  readonly onDragStart?: (event: DragEvent<HTMLButtonElement>) => void
 }
 
 export interface FileTreeClassNames {
@@ -118,6 +123,8 @@ function itemsFromChildren(children: ReactNode): readonly FileTreeItem[] {
         icon: props.icon,
         disabled: props.disabled,
         className: props.className,
+        draggable: props.draggable,
+        onDragStart: props.onDragStart,
       })
     }
   })
@@ -287,11 +294,19 @@ export function FileTree({
                 aria-selected={isSelected}
                 aria-expanded={isFolder ? isOpen : undefined}
                 aria-disabled={row.item.disabled || undefined}
+                draggable={row.item.type === 'file' && row.item.disabled !== true && row.item.draggable === true}
                 tabIndex={focusedRow === row.item.value ? 0 : -1}
                 className={classes('cvxBeuiFileTreeItem', isSelected && 'is-selected', classNames?.item, row.item.className)}
                 style={{ paddingLeft: 8 + row.depth * indent }}
                 onMouseEnter={() => { setHoveredId(row.item.value) }}
                 onFocus={() => { setFocusedId(row.item.value) }}
+                onDragStart={event => {
+                  if (row.item.type !== 'file' || row.item.disabled === true || row.item.draggable !== true) {
+                    event.preventDefault()
+                    return
+                  }
+                  row.item.onDragStart?.(event)
+                }}
                 onKeyDown={event => { handleKeyDown(event, row) }}
                 onClick={() => {
                   if (!itemEnabled(row.item)) return
@@ -303,6 +318,7 @@ export function FileTree({
                   <motion.span
                     aria-hidden="true"
                     layoutId={`cvx-beui-tree-hover-${uid}`}
+                    layoutDependency={hoveredId}
                     className="cvxBeuiFileTreeHover"
                     transition={reduce ? { duration: 0 } : SPRING_LAYOUT}
                   />
@@ -311,6 +327,7 @@ export function FileTree({
                   <motion.span
                     aria-hidden="true"
                     layoutId={`cvx-beui-tree-selection-${uid}`}
+                    layoutDependency={selectedId}
                     className="cvxBeuiFileTreeSelection"
                     transition={reduce ? { duration: 0 } : SPRING_LAYOUT}
                   />

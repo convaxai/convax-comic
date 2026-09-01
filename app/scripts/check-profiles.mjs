@@ -170,7 +170,6 @@ if (defaultProfile.byId.get('ui-workspace')?.disabled !== true) {
 }
 for (const [id, packageName] of [
   ['app-runtime', '@convax/runtime'],
-  ['app-test-consumer', '@convax/test-consumer'],
   ['app-ui', '@convax/ui'],
   ['app-project', '@convax/project'],
   ['app-sqlite-runtime', '@convax/sqlite-runtime'],
