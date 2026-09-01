@@ -11,6 +11,7 @@ import {
 import { readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import YAML from 'yaml'
+import { createProfileDataParser } from '../../scripts/profile-core.mjs'
 import { isDesktopProfile } from './profile-args.js'
 import { resolvePackageDirectory } from './runtime-paths.js'
 import type { DesktopProfile } from './types.js'
@@ -38,49 +39,10 @@ export function resolveProfileSourceRoot(options: ProfileSourceOptions): string 
 
 const PACKAGE_NAME = /^(?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*$/u
 
-function assertNoExecutableExpressions(value: unknown, path = '$'): void {
-  if (value === null || typeof value !== 'object') return
-  if (Object.hasOwn(value, '__jsExpr')) {
-    throw new TypeError(`product patch contains an executable expression at ${path}`)
-  }
-  if (Array.isArray(value)) {
-    value.forEach((entry, index) => assertNoExecutableExpressions(entry, `${path}[${String(index)}]`))
-    return
-  }
-  for (const [key, entry] of Object.entries(value)) {
-    assertNoExecutableExpressions(entry, `${path}.${key}`)
-  }
-}
+const profileDataParser = createProfileDataParser(source => YAML.parse(source))
 
-export function assertPureDataPatchSource(patchSource: string): readonly unknown[] {
-  if (/!!js\b/u.test(patchSource)) {
-    throw new TypeError('product patch contains an executable !!js tag')
-  }
-  const patches: unknown = YAML.parse(patchSource)
-  if (!Array.isArray(patches)) throw new TypeError('profile patch root must be an array')
-  assertNoExecutableExpressions(patches)
-  return patches
-}
-
-export function profilePackageNames(patchSource: string): readonly string[] {
-  const patches = assertPureDataPatchSource(patchSource)
-  const names: string[] = []
-  for (const patch of patches) {
-    if (patch === null || typeof patch !== 'object') continue
-    const inserted = (patch as { insert?: unknown }).insert
-    if (!Array.isArray(inserted)) continue
-    for (const row of inserted) {
-      const name = row !== null && typeof row === 'object'
-        ? (row as { name?: unknown }).name
-        : undefined
-      if (typeof name !== 'string' || !PACKAGE_NAME.test(name)) {
-        throw new TypeError(`profile insert has an invalid package name: ${String(name)}`)
-      }
-      if (!names.includes(name)) names.push(name)
-    }
-  }
-  return Object.freeze(names)
-}
+export const assertPureDataPatchSource = profileDataParser.parsePureDataPatches
+export const profilePackageNames = profileDataParser.profilePackageNames
 
 export function resolveProductPackageTargets(
   desktopPackageRoot: string,

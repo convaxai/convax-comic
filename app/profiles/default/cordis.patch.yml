@@ -78,8 +78,6 @@
 
     - id: app-desktop-host
       name: '@convax/desktop'
-      config:
-        profile: default
 
     - id: app-sqlite-runtime
       name: '@convax/sqlite-runtime'

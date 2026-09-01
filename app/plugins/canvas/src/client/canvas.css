@@ -1,4 +1,3 @@
-.cvxWorkbench,
 .cvxCanvasOverlay,
 .cvxCanvasLauncher,
 .cvxTreeSection {
@@ -26,55 +25,7 @@
   --cvx-canvas-shadow-medium: 0 12px 36px rgb(0 0 0 / 26%);
   --cvx-canvas-motion-fast: var(--ds-transition-duration-fast, 100ms);
   --cvx-canvas-motion-normal: var(--ds-transition-duration-normal, 160ms);
-  --cvx-canvas-motion-slow: var(--ds-transition-duration-slow, 250ms);
   --cvx-canvas-ease: var(--ds-ease-in-out, cubic-bezier(.25, .46, .45, .94));
-}
-
-.cvxWorkbench {
-  position: fixed;
-  inset: 0;
-  z-index: 1;
-  display: grid;
-  grid-template-rows: 100%;
-  min-width: 0;
-  min-height: 0;
-  overflow: hidden;
-  color: var(--cvx-canvas-ink);
-  background: var(--cvx-canvas-base);
-  font-family: var(--dsw-font-family, Inter, ui-sans-serif, system-ui, -apple-system, sans-serif);
-  transition: grid-template-columns var(--cvx-canvas-motion-slow) var(--cvx-canvas-ease);
-}
-
-.cvxWorkbench[data-resizing] {
-  cursor: col-resize;
-  user-select: none;
-  transition: none;
-}
-
-.cvxWorkbenchSidebar,
-.cvxWorkbenchAgentSeat {
-  min-width: 0;
-  min-height: 0;
-  overflow: hidden;
-}
-
-.cvxWorkbenchSidebar {
-  border-right: 1px solid var(--cvx-canvas-line);
-  background: var(--dsw-specific-sidebar-fill, var(--cvx-canvas-panel));
-}
-
-.cvxWorkbenchSidebar > *,
-.cvxWorkbenchAgentSeat > * {
-  height: 100%;
-}
-
-.cvxWorkbenchAgentSeat {
-  border-left: 1px solid var(--cvx-canvas-line-strong);
-  background: var(--cvx-canvas-panel);
-}
-
-.cvxWorkbench[data-agent-collapsed] .cvxWorkbenchAgentSeat {
-  border-left: 0;
 }
 
 .cvxWorkbenchCanvas {
@@ -83,52 +34,6 @@
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-}
-
-.cvxWorkbenchResizeHandle {
-  position: absolute;
-  z-index: 40;
-  top: 0;
-  bottom: 0;
-  width: 8px;
-  margin-left: -4px;
-  cursor: col-resize;
-  touch-action: none;
-  outline: none;
-}
-
-.cvxWorkbenchResizeHandle:focus-visible {
-  background: color-mix(in oklab, var(--cvx-canvas-accent) 18%, transparent);
-}
-
-.cvxWorkbenchResizeHandle[data-side="agent"]::after {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 12px;
-  height: 32px;
-  box-sizing: border-box;
-  border: 1px solid var(--cvx-canvas-line-strong);
-  border-radius: 10px;
-  opacity: 0;
-  background: var(--dsw-alias-button-floating-fill, var(--cvx-canvas-raised));
-  content: "";
-  transform: translate(-50%, -50%);
-  transition: opacity var(--cvx-canvas-motion-normal) var(--cvx-canvas-ease);
-}
-
-.cvxWorkbenchAgentSeat:hover ~ .cvxWorkbenchResizeHandle[data-side="agent"]::after,
-.cvxWorkbenchResizeHandle[data-side="agent"]:hover::after,
-.cvxWorkbenchResizeHandle[data-side="agent"]:focus-visible::after {
-  opacity: 1;
-}
-
-.cvxTreeScroll {
-  min-height: 0;
-  height: 100%;
-  overflow: auto;
-  padding: 8px 8px 20px;
-  box-sizing: border-box;
 }
 
 .cvxTreeSection {
@@ -195,12 +100,6 @@
   min-height: 0;
 }
 
-.cvxTreeHeaderActions {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-}
-
 .cvxTreeAdd {
   appearance: none;
   display: grid;
@@ -248,199 +147,11 @@
   font-weight: 600;
 }
 
-.cvxTreeBranch,
-.cvxTreeItem {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  width: 100%;
-  min-width: 0;
-  height: 30px;
-  box-sizing: border-box;
-  padding: 0 8px;
-  border: 0;
-  border-radius: var(--cvx-canvas-radius-sm);
-  color: var(--cvx-canvas-secondary);
-  background: transparent;
-  font: inherit;
-  font-size: 11px;
-  text-align: left;
-}
-
-.cvxTreeItem {
-  cursor: pointer;
-}
-
-.cvxTreeItem:hover,
-.cvxTreeItemActive {
-  color: var(--cvx-canvas-ink);
-  background: var(--cvx-canvas-accent-soft);
-}
-
-.cvxTreeItem svg {
-  flex: none;
-  color: var(--cvx-canvas-accent);
-}
-
-.cvxTreeItem span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.cvxTreeItem small {
-  margin-left: auto;
-  color: var(--cvx-canvas-muted);
-  font-size: 9px;
-  font-variant-numeric: tabular-nums;
-}
-
-.cvxTreeChevron {
-  width: 12px;
-  color: var(--cvx-canvas-dimmed);
-  text-align: center;
-}
-
-.cvxTreeEmpty {
-  margin: 5px 8px 4px 27px;
-  color: var(--cvx-canvas-muted);
-  font-size: 11px;
-  line-height: 1.5;
-}
-
 .cvxTreeError {
   margin: 6px 8px;
   color: var(--cvx-canvas-danger);
   font-size: 10px;
   line-height: 1.4;
-}
-
-.cvxTreeNodes {
-  margin-left: 15px;
-  padding-left: 5px;
-  border-left: 1px solid var(--cvx-canvas-line);
-}
-
-.cvxProjectRail {
-  display: grid;
-  justify-items: center;
-  padding-top: 6px;
-}
-
-.cvxProjectRail button {
-  appearance: none;
-  display: grid;
-  place-items: center;
-  width: 36px;
-  height: 36px;
-  border: 1px solid transparent;
-  border-radius: var(--cvx-canvas-radius-md);
-  color: var(--cvx-canvas-secondary);
-  background: transparent;
-  cursor: pointer;
-}
-
-.cvxProjectRail button:hover {
-  color: var(--cvx-canvas-ink);
-  background: var(--cvx-canvas-hover);
-}
-
-.cvxWorkbenchAgent {
-  display: grid;
-  grid-template-rows: 48px minmax(0, 1fr);
-  min-width: 0;
-  min-height: 0;
-  background: var(--cvx-canvas-panel);
-}
-
-.cvxWorkbenchAgent > header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 14px;
-  border-bottom: 1px solid var(--cvx-canvas-line);
-  color: var(--cvx-canvas-ink);
-  font-size: 13px;
-  font-weight: 650;
-  -webkit-app-region: drag;
-  user-select: none;
-}
-
-.cvxWorkbenchAgent > header > div {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.cvxWorkbenchAgentActions {
-  justify-content: flex-end;
-}
-
-.cvxAgentNewSession {
-  appearance: none;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  height: 28px;
-  padding: 0 9px;
-  border: 1px solid var(--cvx-canvas-accent-border);
-  border-radius: var(--cvx-canvas-radius-sm);
-  color: var(--cvx-canvas-ink);
-  background: var(--cvx-canvas-accent-soft);
-  font: inherit;
-  font-size: 10px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background-color var(--cvx-canvas-motion-fast) var(--cvx-canvas-ease);
-  -webkit-app-region: no-drag;
-}
-
-.cvxAgentNewSession:hover {
-  background: var(--cvx-canvas-hover);
-}
-
-.cvxAgentPulse {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--cvx-canvas-accent);
-  box-shadow: 0 0 0 4px color-mix(in oklab, var(--cvx-canvas-accent) 16%, transparent);
-}
-
-.cvxWorkbenchAgentBody {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 0;
-  min-width: 0;
-  min-height: 0;
-  overflow: hidden;
-  transition: grid-template-columns var(--cvx-canvas-motion-normal) var(--cvx-canvas-ease);
-}
-
-.cvxWorkbenchAgentBody[data-details-open] {
-  grid-template-columns: 0 minmax(0, 1fr);
-}
-
-.cvxWorkbenchConversation,
-.cvxWorkbenchDetails {
-  min-width: 0;
-  min-height: 0;
-  overflow: hidden;
-}
-
-.cvxWorkbenchConversation > *,
-.cvxWorkbenchDetails > * {
-  height: 100%;
-}
-
-.cvxWorkbenchOverlays {
-  position: fixed;
-  z-index: 1000;
-  inset: 0;
-  pointer-events: none;
-}
-
-.cvxWorkbenchOverlays > * {
-  pointer-events: auto;
 }
 
 .cvxCanvasLauncher {
@@ -1422,8 +1133,6 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .cvxWorkbench,
-  .cvxWorkbenchAgentBody,
   .cvxCanvasLauncherButton,
   .cvxCanvasButton,
   .cvxCanvasIconButton,

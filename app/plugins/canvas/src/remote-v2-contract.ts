@@ -5,13 +5,10 @@ import {
   assertCanvasEdge,
   assertCanvasId,
   assertCanvasNode,
-  assertEdgeId,
-  assertNodeId,
   assertProjectId,
   assertWorkspaceId,
   decodeJsonPointer,
   isJsonValue,
-  isPlainObject,
   parseCanvasDocument,
   parseCanvasProject,
   type CanvasDocument,
@@ -64,17 +61,10 @@ function identifier(assertion: (value: unknown) => void): z.ZodString {
 const workspaceIdSchema = identifier(assertWorkspaceId)
 const projectIdSchema = identifier(assertProjectId)
 const canvasIdSchema = identifier(assertCanvasId)
-const nodeIdSchema = identifier(assertNodeId)
-const edgeIdSchema = identifier(assertEdgeId)
 const revisionSchema = z.number().int().nonnegative().refine(Number.isSafeInteger)
-const finiteSchema = z.number().finite()
 const nonEmptySchema = z.string().trim().min(1)
 const timestampSchema = z.string().refine(value => /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/.test(value)
   && Number.isFinite(Date.parse(value)), 'Expected an ISO-8601 UTC timestamp')
-const jsonObjectSchema = z.custom<Record<string, unknown>>(
-  value => isPlainObject(value) && isJsonValue(value),
-  'Expected a JSON-safe object',
-)
 const jsonValueSchema = z.custom(value => isJsonValue(value), 'Expected a JSON-safe value')
 const nodeSchema = asserted<CanvasNode>(assertCanvasNode)
 const edgeSchema = asserted<CanvasEdge>(assertCanvasEdge)
@@ -142,23 +132,6 @@ const operationsSchema = z.array(patchOperationSchema)
     }
   })
 
-const nodeChangesSchema = z.strictObject({
-  position: z.strictObject({ x: finiteSchema.optional(), y: finiteSchema.optional() })
-    .refine(position => position.x !== undefined || position.y !== undefined, 'position requires x or y')
-    .optional(),
-  zIndex: finiteSchema.optional(),
-  style: jsonObjectSchema.optional(),
-  data: jsonObjectSchema.optional(),
-}).refine(
-  changes => changes.position !== undefined
-    || changes.zIndex !== undefined
-    || changes.style !== undefined
-    || changes.data !== undefined,
-  'node changes require at least one field',
-)
-const edgeChangesSchema = z.strictObject({ data: jsonObjectSchema.optional() })
-  .refine(changes => changes.data !== undefined, 'edge changes require data')
-
 export const CANVAS_REMOTE_V2_REQUEST_SCHEMAS = Object.freeze({
   listProjects: z.strictObject({ workspaceId: workspaceIdSchema }),
   createProject: z.strictObject({
@@ -207,44 +180,6 @@ export const CANVAS_REMOTE_V2_REQUEST_SCHEMAS = Object.freeze({
     ...documentIdentityShape,
     afterRevision: revisionSchema,
     timeoutMs: z.number().int().min(1).max(30_000).refine(Number.isSafeInteger),
-  }),
-  createNode: z.strictObject({
-    ...documentIdentityShape,
-    expectedRevision: revisionSchema,
-    node: nodeSchema,
-    ...metadataShape,
-  }),
-  updateNode: z.strictObject({
-    ...documentIdentityShape,
-    expectedRevision: revisionSchema,
-    nodeId: nodeIdSchema,
-    changes: nodeChangesSchema,
-    ...metadataShape,
-  }),
-  removeNode: z.strictObject({
-    ...documentIdentityShape,
-    expectedRevision: revisionSchema,
-    nodeId: nodeIdSchema,
-    ...metadataShape,
-  }),
-  createEdge: z.strictObject({
-    ...documentIdentityShape,
-    expectedRevision: revisionSchema,
-    edge: edgeSchema,
-    ...metadataShape,
-  }),
-  updateEdge: z.strictObject({
-    ...documentIdentityShape,
-    expectedRevision: revisionSchema,
-    edgeId: edgeIdSchema,
-    changes: edgeChangesSchema,
-    ...metadataShape,
-  }),
-  removeEdge: z.strictObject({
-    ...documentIdentityShape,
-    expectedRevision: revisionSchema,
-    edgeId: edgeIdSchema,
-    ...metadataShape,
   }),
 })
 
@@ -305,12 +240,6 @@ export const CANVAS_REMOTE_V2_RESULT_SCHEMAS = Object.freeze({
   deleteDocument: deleteDocumentResultSchema,
   applyPatch: applyPatchResultSchema,
   waitForRevision: waitForRevisionResultSchema,
-  createNode: applyPatchResultSchema,
-  updateNode: applyPatchResultSchema,
-  removeNode: applyPatchResultSchema,
-  createEdge: applyPatchResultSchema,
-  updateEdge: applyPatchResultSchema,
-  removeEdge: applyPatchResultSchema,
 })
 
 type RemoteMethod = keyof typeof CANVAS_REMOTE_V2_REQUEST_SCHEMAS
@@ -354,12 +283,6 @@ const METHODS = [
   'deleteDocument',
   'applyPatch',
   'waitForRevision',
-  'createNode',
-  'updateNode',
-  'removeNode',
-  'createEdge',
-  'updateEdge',
-  'removeEdge',
 ] as const satisfies readonly RemoteMethod[]
 
 export const CANVAS_REMOTE_V2_DESCRIPTORS: readonly InvocationDescriptor[] = Object.freeze(

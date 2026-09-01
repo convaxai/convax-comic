@@ -1,7 +1,7 @@
 import { mkdir } from 'node:fs/promises'
 import { isAbsolute, join, resolve } from 'node:path'
 import type { DesktopProfile } from './types.js'
-import { CONTROL_TOKEN_ENV, PROFILE_ENV } from './types.js'
+import { CONTROL_TOKEN_ENV } from './types.js'
 
 export interface DesktopPaths {
   readonly userData: string
@@ -95,13 +95,11 @@ export function childEnvironment(
   base: NodeJS.ProcessEnv,
   token: string,
   paths: DesktopPaths,
-  profile: DesktopProfile,
 ): NodeJS.ProcessEnv {
   const { ELECTRON_RUN_AS_NODE: _forbidden, ...safeBase } = base
   return {
     ...safeBase,
     [CONTROL_TOKEN_ENV]: token,
-    [PROFILE_ENV]: profile,
     DSH_HOME: paths.harnessHome,
     CONVAX_PROJECTS_HOME: paths.projectsHome,
   }

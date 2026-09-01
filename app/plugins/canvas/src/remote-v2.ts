@@ -12,8 +12,6 @@ import type {
   CanvasProject,
   CanvasProjectSummary,
   CreateCanvasDocumentRequest,
-  CreateCanvasEdgeRequest,
-  CreateCanvasNodeRequest,
   CreateCanvasProjectRequest,
   DeleteCanvasDocumentRequest,
   DeleteCanvasDocumentResult,
@@ -23,12 +21,8 @@ import type {
   GetCanvasProjectRequest,
   ListCanvasDocumentsRequest,
   ListCanvasProjectsRequest,
-  RemoveCanvasEdgeRequest,
-  RemoveCanvasNodeRequest,
   RenameCanvasDocumentRequest,
   SetActiveCanvasRequest,
-  UpdateCanvasEdgeRequest,
-  UpdateCanvasNodeRequest,
   WaitForCanvasRevisionRequest,
   WaitForCanvasRevisionResult,
 } from '@convax/canvas-api'
@@ -48,12 +42,6 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
     'canvasV2/deleteDocument': (request: DeleteCanvasDocumentRequest) => Promise<RemoteResult<DeleteCanvasDocumentResult>>
     'canvasV2/applyPatch': (request: ApplyCanvasPatchRequest) => Promise<RemoteResult<ApplyCanvasPatchResult>>
     'canvasV2/waitForRevision': (request: WaitForCanvasRevisionRequest, signal: AbortSignal) => Promise<RemoteResult<WaitForCanvasRevisionResult>>
-    'canvasV2/createNode': (request: CreateCanvasNodeRequest) => Promise<RemoteResult<ApplyCanvasPatchResult>>
-    'canvasV2/updateNode': (request: UpdateCanvasNodeRequest) => Promise<RemoteResult<ApplyCanvasPatchResult>>
-    'canvasV2/removeNode': (request: RemoveCanvasNodeRequest) => Promise<RemoteResult<ApplyCanvasPatchResult>>
-    'canvasV2/createEdge': (request: CreateCanvasEdgeRequest) => Promise<RemoteResult<ApplyCanvasPatchResult>>
-    'canvasV2/updateEdge': (request: UpdateCanvasEdgeRequest) => Promise<RemoteResult<ApplyCanvasPatchResult>>
-    'canvasV2/removeEdge': (request: RemoveCanvasEdgeRequest) => Promise<RemoteResult<ApplyCanvasPatchResult>>
   }
 
   interface TypertRemoteNamespaceMap {
@@ -70,12 +58,6 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
       deleteDocument: TypertRemoteMap['canvasV2/deleteDocument']
       applyPatch: TypertRemoteMap['canvasV2/applyPatch']
       waitForRevision: TypertRemoteMap['canvasV2/waitForRevision']
-      createNode: TypertRemoteMap['canvasV2/createNode']
-      updateNode: TypertRemoteMap['canvasV2/updateNode']
-      removeNode: TypertRemoteMap['canvasV2/removeNode']
-      createEdge: TypertRemoteMap['canvasV2/createEdge']
-      updateEdge: TypertRemoteMap['canvasV2/updateEdge']
-      removeEdge: TypertRemoteMap['canvasV2/removeEdge']
     }
   }
 }
@@ -141,30 +123,6 @@ export class CanvasRemoteV2Service extends TypertRemoteService {
     signal: AbortSignal,
   ): Promise<WaitForCanvasRevisionResult> {
     return this.host.documents.waitForRevision(request, signal)
-  }
-
-  createNode(request: CreateCanvasNodeRequest): Promise<ApplyCanvasPatchResult> {
-    return this.host.nodes.create(request)
-  }
-
-  updateNode(request: UpdateCanvasNodeRequest): Promise<ApplyCanvasPatchResult> {
-    return this.host.nodes.update(request)
-  }
-
-  removeNode(request: RemoveCanvasNodeRequest): Promise<ApplyCanvasPatchResult> {
-    return this.host.nodes.remove(request)
-  }
-
-  createEdge(request: CreateCanvasEdgeRequest): Promise<ApplyCanvasPatchResult> {
-    return this.host.edges.create(request)
-  }
-
-  updateEdge(request: UpdateCanvasEdgeRequest): Promise<ApplyCanvasPatchResult> {
-    return this.host.edges.update(request)
-  }
-
-  removeEdge(request: RemoveCanvasEdgeRequest): Promise<ApplyCanvasPatchResult> {
-    return this.host.edges.remove(request)
   }
 }
 

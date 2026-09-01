@@ -7,7 +7,6 @@ import { RedactingFileLog, redactSecrets, type LaunchLog } from './redaction.js'
 import { normalizeLoopbackOrigin } from './security.js'
 import type {
   DesktopProfile,
-  DesktopStateQuery,
   LaunchContext,
   ReadyMessage,
   StartupFailureMessage,
@@ -19,9 +18,7 @@ export interface ManagedChild extends EventEmitter {
   readonly pid?: number
   readonly stdout: NodeJS.ReadableStream | null
   readonly stderr: NodeJS.ReadableStream | null
-  readonly connected?: boolean
   kill(signal?: NodeJS.Signals | number): boolean
-  send?(message: unknown, callback?: (error: Error | null) => void): boolean
 }
 
 export type SpawnManagedChild = (
@@ -188,7 +185,7 @@ export class DshSupervisor extends EventEmitter {
         ['--require', this.#options.parentGuard, this.#options.dshCli, ...args],
         {
           cwd: this.#options.paths.launchRoot,
-          env: childEnvironment(process.env, token, this.#options.paths, this.#options.profile),
+          env: childEnvironment(process.env, token, this.#options.paths),
           stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
           detached: process.platform !== 'win32',
           windowsHide: true,
@@ -222,10 +219,6 @@ export class DshSupervisor extends EventEmitter {
 
   #handleMessage(child: ManagedChild, message: unknown): void {
     if (this.#child !== child) return
-    if (isDesktopStateQuery(message)) {
-      this.#sendDesktopState(child)
-      return
-    }
     if (!this.#ready && isStartupFailureMessage(message)) {
       this.#clearStartupTimer()
       this.#suppressRestart = true
@@ -249,19 +242,8 @@ export class DshSupervisor extends EventEmitter {
     this.#ready = true
     this.#status = 'ready'
     const context = this.getLaunchContext()
-    this.#sendDesktopState(child)
     this.emit('context', context)
     this.emit('ready', context)
-  }
-
-  #sendDesktopState(child: ManagedChild): void {
-    if (child.connected === false || child.send === undefined) return
-    child.send({
-      type: 'convax:desktop-state',
-      origin: this.#origin,
-      profile: this.#options.profile,
-      ready: this.#ready,
-    }, () => undefined)
   }
 
   #handleClose(
@@ -370,9 +352,4 @@ function isStartupFailureMessage(message: unknown): message is StartupFailureMes
     && typeof candidate.message === 'string'
     && candidate.message.length > 0
     && candidate.message.length <= 2_000
-}
-
-function isDesktopStateQuery(message: unknown): message is DesktopStateQuery {
-  if (message === null || typeof message !== 'object') return false
-  return (message as Partial<DesktopStateQuery>).type === 'convax:desktop-query'
 }

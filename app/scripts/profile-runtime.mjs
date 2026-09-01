@@ -3,6 +3,7 @@ import { createRequire } from 'node:module'
 import { dirname, isAbsolute, join, parse, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import YAML from 'yaml'
+import { createProfileDataParser } from './profile-core.mjs'
 
 export const REPOSITORY_ROOT = fileURLToPath(new URL('../..', import.meta.url))
 export const PROFILE_NAMES = Object.freeze(['compatibility', 'default'])
@@ -10,7 +11,7 @@ export const TRUSTED_SECURITY_PATCH = join(REPOSITORY_ROOT, 'app', 'profiles', '
 const DESKTOP_PACKAGE_ROOT = join(REPOSITORY_ROOT, 'app', 'desktop')
 const desktopRequire = createRequire(join(DESKTOP_PACKAGE_ROOT, 'package.json'))
 const desktopManifest = JSON.parse(readFileSync(join(DESKTOP_PACKAGE_ROOT, 'package.json'), 'utf8'))
-const PACKAGE_NAME = /^(?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*$/u
+const profileDataParser = createProfileDataParser(source => YAML.parse(source))
 
 function profileSource(name) {
   if (!PROFILE_NAMES.includes(name)) throw new Error(`unknown product profile ${JSON.stringify(name)}`)
@@ -21,42 +22,8 @@ function replaceFile(path, contents) {
   writeFileSync(path, contents.endsWith('\n') ? contents : `${contents}\n`)
 }
 
-function assertNoExecutableExpressions(value, path = '$') {
-  if (value === null || typeof value !== 'object') return
-  if (Object.hasOwn(value, '__jsExpr')) {
-    throw new TypeError(`product patch contains an executable expression at ${path}`)
-  }
-  if (Array.isArray(value)) {
-    value.forEach((entry, index) => assertNoExecutableExpressions(entry, `${path}[${String(index)}]`))
-    return
-  }
-  for (const [key, entry] of Object.entries(value)) {
-    assertNoExecutableExpressions(entry, `${path}.${key}`)
-  }
-}
-
-export function parsePureDataPatches(patchSource) {
-  if (/!!js\b/u.test(patchSource)) throw new TypeError('product patch contains an executable !!js tag')
-  const patches = YAML.parse(patchSource)
-  if (!Array.isArray(patches)) throw new TypeError('profile patch root must be an array')
-  assertNoExecutableExpressions(patches)
-  return patches
-}
-
-export function profilePackageNames(patchSource) {
-  const patches = parsePureDataPatches(patchSource)
-  const names = []
-  for (const patch of patches) {
-    const inserted = Array.isArray(patch?.insert) ? patch.insert : []
-    for (const row of inserted) {
-      if (typeof row?.name !== 'string' || !PACKAGE_NAME.test(row.name)) {
-        throw new TypeError(`profile insert has an invalid package name: ${String(row?.name)}`)
-      }
-      if (!names.includes(row.name)) names.push(row.name)
-    }
-  }
-  return names
-}
+export const parsePureDataPatches = profileDataParser.parsePureDataPatches
+export const profilePackageNames = profileDataParser.profilePackageNames
 
 function resolvePackageManifest(packageName) {
   try {

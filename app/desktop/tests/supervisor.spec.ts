@@ -14,17 +14,9 @@ class FakeChild extends EventEmitter implements ManagedChild {
   readonly stdout = new PassThrough()
   readonly stderr = new PassThrough()
   readonly kills: Array<NodeJS.Signals | number | undefined> = []
-  readonly sent: unknown[] = []
-  connected = true
 
   kill(signal?: NodeJS.Signals | number): boolean {
     this.kills.push(signal)
-    return true
-  }
-
-  send(message: unknown, callback?: (error: Error | null) => void): boolean {
-    this.sent.push(message)
-    callback?.(null)
     return true
   }
 }
@@ -149,13 +141,6 @@ describe('DSH child supervisor', () => {
     calls[0]!.child.emit('message', {
       type: 'convax:ready',
       origin: 'http://127.0.0.1:41001',
-    })
-    calls[0]!.child.emit('message', { type: 'convax:desktop-query' })
-    expect(calls[0]!.child.sent.at(-1)).toEqual({
-      type: 'convax:desktop-state',
-      origin: 'http://127.0.0.1:41001',
-      profile: 'default',
-      ready: true,
     })
     expect(supervisor.getLaunchContext()).toMatchObject({
       token: tokenA,
