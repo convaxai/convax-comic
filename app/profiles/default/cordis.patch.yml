@@ -1,6 +1,6 @@
-# Default inherits the compatibility security posture and replaces only the
-# documented generic brand slots through @convax/ui. Canvas owns the root slot
-# in this product profile and hosts the official conversation in its right pane.
+# Default inherits the compatibility security posture. @convax/ui replaces the
+# documented brand and settings-shell slots; Project owns the root slot and
+# hosts the official conversation in its right pane.
 - id: webserver
   name: '@deepseek-ai/dsh-host-webserver'
   disabled: true
@@ -50,6 +50,12 @@
   name: '@deepseek-ai/dsh-client-ui-layout'
   disabled: true
 
+# @convax/ui owns the default settings shell and keeps the feature-owned
+# settings.section / settings.general.item extension seats intact.
+- id: ui-settings-general
+  name: '@deepseek-ai/dsh-client-ui-settings-general'
+  disabled: true
+
 - id: ui-workspace
   name: '@deepseek-ai/dsh-client-ui-workspace'
   disabled: true
@@ -77,11 +83,6 @@
 
     - id: app-sqlite-runtime
       name: '@convax/sqlite-runtime'
-
-    # Deliberately precedes its provider: Cordis inject, not row order, owns
-    # activation.
-    - id: app-test-consumer
-      name: '@convax/test-consumer'
 
     - id: app-runtime
       name: '@convax/runtime'

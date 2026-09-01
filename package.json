@@ -62,9 +62,10 @@
     }
   },
   "scripts": {
-    "build": "yarn workspaces foreach -A --topological-dev run build",
+    "build": "yarn workspaces foreach -A --topological-dev run build && yarn check:client-bundles",
     "typecheck": "yarn workspaces foreach -A --parallel run typecheck",
     "test": "yarn workspaces foreach -A --parallel run test",
+    "check:client-bundles": "node app/scripts/check-client-bundles.mjs",
     "check:profiles": "node app/scripts/check-profiles.mjs",
     "check:dump-config": "node app/scripts/check-dump-config.mjs",
     "check:layout": "node app/scripts/verify-layout.mjs",

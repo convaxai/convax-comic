@@ -22,6 +22,7 @@ export interface WorkspaceViewLike {
 export interface WorkspacesLike {
   readonly list: ObservableStore<{
     readonly items: readonly WorkspaceViewLike[]
+    readonly baselinesReady: boolean
     readonly recentWorkspaceId?: string
   }>
   connectWorkspace(workspaceId: string): Promise<string>
@@ -54,6 +55,12 @@ export interface ComicProjectSnapshot {
 type ProjectRemote = TypertRemoteNamespaceMap['projectFiles']
 type Listener = () => void
 
+interface WorkspaceNavigation {
+  readonly workspaceId: string
+  readonly previousSessionId: string | undefined
+  sessionId?: string
+}
+
 export class ProjectRemoteError extends Error {
   readonly code: string
   constructor(failure: RemoteFailure) {
@@ -73,10 +80,9 @@ export function selectActiveWorkspace(
   currentSessionId: string | undefined,
   recentWorkspaceId: string | undefined,
 ): string | undefined {
-  const current = currentSessionId === undefined
-    ? undefined
-    : workspaces.find(workspace => workspace.sessionIds.includes(currentSessionId))?.workspaceId
-  if (current !== undefined) return current
+  if (currentSessionId !== undefined) {
+    return workspaces.find(workspace => workspace.sessionIds.includes(currentSessionId))?.workspaceId
+  }
   if (recentWorkspaceId !== undefined && workspaces.some(workspace => workspace.workspaceId === recentWorkspaceId)) {
     return recentWorkspaceId
   }
@@ -89,13 +95,18 @@ export class ComicProjectRuntime {
   readonly #sessions: SessionsLike
   readonly #listeners = new Set<Listener>()
   readonly #directories = new Map<string, ProjectDirectorySnapshot>()
+  readonly #directoryRequests = new Map<string, number>()
   readonly #expanded = new Set<string>()
   #snapshot: ComicProjectSnapshot = Object.freeze({
     workspaces: Object.freeze([]), sequence: 0, directories: Object.freeze({}), expanded: Object.freeze([]), phase: 'idle',
   })
   #leaseId: string | undefined
   #leaseAbort: AbortController | undefined
+  #navigation: WorkspaceNavigation | undefined
+  #navigationVersion = 0
+  #addProjectRequestId = 0
   #generation = 0
+  #directoryRequestId = 0
   #disposed = false
   #unsubscribers: Array<() => void> = []
 
@@ -120,26 +131,78 @@ export class ComicProjectRuntime {
 
   scope(): ComicProjectScope | undefined {
     const workspaceId = this.#snapshot.activeWorkspaceId
-    return workspaceId === undefined ? undefined : Object.freeze({ workspaceId, projectId: PROJECT_ROOT_ID })
+    return workspaceId === undefined ? undefined : Object.freeze({
+      workspaceId,
+      projectId: PROJECT_ROOT_ID,
+      readFile: (path: string, signal: AbortSignal) => this.#readProjectFile(workspaceId, path, signal),
+    })
+  }
+
+  async #readProjectFile(workspaceId: string, path: string, signal: AbortSignal) {
+    if (this.#disposed || workspaceId !== this.#snapshot.activeWorkspaceId) {
+      throw new Error('project selection changed before the file could be added to Canvas')
+    }
+    return unwrapProjectRemote(await this.#remote.read({ workspaceId, path }, signal))
   }
 
   async switchWorkspace(workspaceId: string): Promise<void> {
-    const sessionId = await this.#workspaces.connectWorkspace(workspaceId)
-    this.#sessions.open(sessionId)
+    if (this.#disposed) return
+    this.#navigationVersion += 1
+    const navigation: WorkspaceNavigation = {
+      workspaceId,
+      previousSessionId: this.#sessions.list.getSnapshot().current,
+    }
+    this.#navigation = navigation
+    this.#followSelection()
+    try {
+      const sessionId = await this.#workspaces.connectWorkspace(workspaceId)
+      if (this.#disposed || this.#navigation !== navigation) return
+      const current = this.#sessions.list.getSnapshot().current
+      if (current !== navigation.previousSessionId && current !== sessionId) {
+        this.#navigation = undefined
+        this.#followSelection()
+        return
+      }
+      navigation.sessionId = sessionId
+      this.#sessions.open(sessionId)
+      this.#followSelection()
+    } catch (error) {
+      if (this.#disposed || this.#navigation !== navigation) return
+      this.#navigation = undefined
+      this.#followSelection()
+      throw error
+    }
   }
 
   async addProject(): Promise<void> {
-    const path = await this.#workspaces.pickDirectory()
-    if (path === null) return
-    const workspace = await this.#workspaces.create({ path })
+    const requestId = ++this.#addProjectRequestId
+    const navigationVersion = this.#navigationVersion
+    const stale = (): boolean => this.#disposed
+      || requestId !== this.#addProjectRequestId
+      || navigationVersion !== this.#navigationVersion
+    let path: string | null
+    try {
+      path = await this.#workspaces.pickDirectory()
+    } catch (error) {
+      if (stale()) return
+      throw error
+    }
+    if (path === null || stale()) return
+    let workspace: WorkspaceViewLike
+    try {
+      workspace = await this.#workspaces.create({ path })
+    } catch (error) {
+      if (stale()) return
+      throw error
+    }
+    if (stale()) return
     await this.switchWorkspace(workspace.workspaceId)
   }
 
   async newSession(): Promise<void> {
     const workspaceId = this.#snapshot.activeWorkspaceId
     if (workspaceId === undefined) return
-    const sessionId = await this.#workspaces.connectWorkspace(workspaceId)
-    this.#sessions.open(sessionId)
+    await this.switchWorkspace(workspaceId)
   }
 
   async toggleDirectory(path: string): Promise<void> {
@@ -162,15 +225,19 @@ export class ComicProjectRuntime {
   async loadDirectory(path: string): Promise<void> {
     const leaseId = this.#leaseId
     if (leaseId === undefined) return
+    const requestId = ++this.#directoryRequestId
+    this.#directoryRequests.set(path, requestId)
     this.#directories.set(path, { entries: this.#directories.get(path)?.entries ?? [], truncated: false, loading: true })
     this.#publish()
     try {
       const result = unwrapProjectRemote(await this.#remote.list({ leaseId, path }))
-      if (leaseId !== this.#leaseId) return
+      if (leaseId !== this.#leaseId || this.#directoryRequests.get(path) !== requestId) return
+      this.#directoryRequests.delete(path)
       this.#directories.set(path, { entries: result.entries, truncated: result.truncated, loading: false })
       this.#setSequence(result)
     } catch (error) {
-      if (leaseId !== this.#leaseId) return
+      if (leaseId !== this.#leaseId || this.#directoryRequests.get(path) !== requestId) return
+      this.#directoryRequests.delete(path)
       this.#directories.set(path, {
         entries: this.#directories.get(path)?.entries ?? [], truncated: false, loading: false, error: message(error),
       })
@@ -182,6 +249,8 @@ export class ComicProjectRuntime {
     if (this.#disposed) return
     this.#disposed = true
     this.#generation += 1
+    this.#navigation = undefined
+    this.#directoryRequests.clear()
     for (const unsubscribe of this.#unsubscribers.splice(0)) unsubscribe()
     await this.#releaseLease()
     this.#listeners.clear()
@@ -191,7 +260,28 @@ export class ComicProjectRuntime {
     if (this.#disposed) return
     const workspaces = this.#workspaces.list.getSnapshot()
     const current = this.#sessions.list.getSnapshot().current
-    const selected = selectActiveWorkspace(workspaces.items, current, workspaces.recentWorkspaceId)
+    const currentWorkspaceId = current === undefined
+      ? undefined
+      : workspaces.items.find(workspace => workspace.sessionIds.includes(current))?.workspaceId
+    const navigation = this.#navigation
+    let selected: string | undefined
+    if (navigation === undefined) {
+      selected = workspaces.baselinesReady
+        ? selectActiveWorkspace(workspaces.items, current, workspaces.recentWorkspaceId)
+        : undefined
+    } else if (navigation.sessionId === undefined
+      || current === navigation.sessionId
+      || current === navigation.previousSessionId) {
+      selected = navigation.workspaceId
+      if (current === navigation.sessionId && currentWorkspaceId === navigation.workspaceId) {
+        this.#navigation = undefined
+      }
+    } else {
+      this.#navigation = undefined
+      selected = workspaces.baselinesReady
+        ? selectActiveWorkspace(workspaces.items, current, workspaces.recentWorkspaceId)
+        : undefined
+    }
     if (selected === this.#snapshot.activeWorkspaceId) {
       this.#snapshot = Object.freeze({ ...this.#snapshot, workspaces: Object.freeze([...workspaces.items]) })
       this.#emit()
@@ -207,6 +297,7 @@ export class ComicProjectRuntime {
       phase: selected === undefined ? 'idle' : 'opening',
     })
     this.#directories.clear()
+    this.#directoryRequests.clear()
     this.#expanded.clear()
     this.#emit()
     void this.#openSelection(selected, generation)
@@ -239,6 +330,7 @@ export class ComicProjectRuntime {
     while (!signal.aborted && generation === this.#generation && leaseId === this.#leaseId) {
       try {
         const result = unwrapProjectRemote(await this.#remote.wait({ leaseId, afterSequence: after, timeoutMs: 20_000 }, signal))
+        if (signal.aborted || generation !== this.#generation || leaseId !== this.#leaseId) return
         after = result.sequence
         if (result.status === 'changed') await this.#applyInvalidation(result)
       } catch (error) {

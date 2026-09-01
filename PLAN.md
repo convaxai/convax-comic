@@ -57,7 +57,6 @@ app/
     auth-fence/     HTTP / WebSocket token 鉴权
     command-guard/  高风险 shell 命令审批
     runtime/        appRuntime 服务
-    test-consumer/  生命周期证明插件
     ui/             默认 profile 的 Comic 品牌 slot 与 BeUI 全局主题适配
     canvas-api/     JSON-only V2 contract、leaf Patch 与 Host/Client 扩展接口
     sqlite-runtime/ 通用 owner-scoped SQLite 生命周期、migration 与事务运行时
@@ -100,6 +99,11 @@ upstream.json       npm 运行版本与外部源码 commit 映射
   `app/packages/beui` 适配为无 Tailwind 运行时依赖的共享 primitives，各物理 Client
   插件在构建时内联所需实现，React 仍使用 DSH ModuleLoader 单例；上游控件先经官方
   theme token 收敛，再按文档化 Slot 逐个替换，`compatibility` 不挂载任何该呈现层。
+  `@convax/ui` 在 default 中接管 `sidebar.settings`，保留 feature-owned
+  `settings.section`、`settings.general.item` 与 onboarding 扩展面，并通过 DSH locale
+  service 提供中英文 shell 文案；由于官方 `ui-layout` 被 Project root 替代，该插件也
+  负责把 theme snapshot（含 token override）可逆投影到 DOM，使 BeUI 的明暗模式与主题色
+  始终跟随持久化设置。
 - `default` 由 Project Client 接管文档化 `root` 与 `sidebar.workspaces` slot，
   但 panel 内容仍不硬编码进壳：顶部项目选择器投影 DSH Workspace，切换时通过
   官方 `workspaces.connectWorkspace` / `sessions.open` 同步当前会话；左侧为项目
@@ -130,8 +134,11 @@ upstream.json       npm 运行版本与外部源码 commit 映射
   Workspace UUID，Canvas 的根项目固定为 `project:root`。浏览器只向 Host 发送
   Workspace ID 与受限相对路径；Host 从 `workspaceRegistry` 取规范根目录，以
   `ctx.fs.resolve/contains/listDir` 做权威的一层读取，绝不跨 Typert 返回绝对路径
-  或内部 target。Chokidar `followSymlinks:false` 只发送批量失效提示，目录项仍
-  以 `ctx.fs` 重读为准；Client 懒加载展开分支、虚拟化可见行，并在序列缺口、
+  或内部 target。Files→Canvas 拖拽同样只传精确 `{workspaceId, path}` 引用：Host
+  重新校验 Workspace、相对路径、逐段 symlink、`resolve/contains`、文件类型与大小，
+  并以有界 `ctx.fs.readBytes` 返回受支持的 UTF-8 文本或 PNG/JPEG/GIF/WebP；浏览器
+  不接触绝对路径、Host target 或任意 `file:` URL。Chokidar `followSymlinks:false`
+  只发送批量失效提示，目录项仍以 `ctx.fs` 重读为准；Client 懒加载展开分支、虚拟化可见行，并在序列缺口、
   watcher 错误或恢复焦点时 reset/refetch。删除后以同一路径重新注册会获得新的
   DSH UUID，C1 不自动别名或迁移旧 Canvas；这类 orphan/rebind 归 C2 项目目录
   catalog 与显式迁移流程处理。
@@ -165,8 +172,9 @@ upstream.json       npm 运行版本与外部源码 commit 映射
 - `@convax/canvas-builtins` 是独立 physical plugin：Host 贡献
   `comic.note@1`、`comic.image@1`、`comic.sequence@1`，Client 对称贡献 renderer。
   type registry 以 `(type, kindVersion)` 建键，插件缺失或版本不匹配的既存 data
-  无损只读，仍可移动、resize、连接和原子删除；外部图片 `File` 与 object URL
-  只在临时资源表存在并在失去引用或插件卸载时释放。后续持久资产必须写入
+  无损只读，仍可移动、resize、连接和原子删除；外部或 Files 目录树拖入的图片
+  `File` 与 object URL 只在临时资源表存在并在失去引用或插件卸载时释放。
+  后续持久资产必须写入
   产品自有目录，不得写入 DSH storage、attachments 或会话。
 - 漫画项目、角色、场景、分镜、媒体资产和导出物最终必须由领域插件放在
   产品自有目录；持久 schema 与迁移策略在项目工作流明确后继续演进。
@@ -205,7 +213,9 @@ C2 之前不预设具体模型供应商、图片生成服务、持久资产 sche
   Patch、Host 多画布 revision/active CAS、Typert Remote、单 waiter、
   乐观 Client、builtins 生命周期、Agent 工具、外部拖拽、临时媒体释放与 root
   slot 卸载均有 headless 测试；React Flow
-  依赖完整内联到动态 Client bundle，不产生孤立 CSS。单一编辑/空格平移策略、
+  依赖完整内联到动态 Client bundle，不产生孤立 CSS；所有产品 Client bundle 的直接
+  `require()` 必须是 DSH ModuleLoader seed word 或显式捕获的可选探测，并由构建后门禁扫描。
+  单一编辑/空格平移策略、
   核心快捷键、整理布局、批量移动、拖动/缩放历史、无点击/拖动阈值死亡区与非零 viewport 高度有回归测试。
 - preload 暴露面、权限 profile、host/port、source/npm pin 与补丁清单相对
   导入基座无变化。

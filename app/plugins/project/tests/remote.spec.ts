@@ -7,6 +7,10 @@ describe('Project files Remote service', () => {
     const manager = {
       open: vi.fn(async () => ({ leaseId: 'lease-1', workspaceId: 'workspace-1', sequence: 0 })),
       list: vi.fn(),
+      read: vi.fn(async () => ({
+        kind: 'text', path: 'README.md', name: 'README.md', size: 2,
+        mimeType: 'text/markdown', text: 'hi',
+      })),
       wait: vi.fn(),
       closeLease: vi.fn(),
     }
@@ -18,6 +22,11 @@ describe('Project files Remote service', () => {
       leaseId: 'lease-1', workspaceId: 'workspace-1', sequence: 0,
     })
     expect(manager.open).toHaveBeenCalledWith({ workspaceId: 'workspace-1' })
+    const signal = new AbortController().signal
+    await expect(service.read({ workspaceId: 'workspace-1', path: 'README.md' }, signal)).resolves.toMatchObject({
+      kind: 'text', path: 'README.md', text: 'hi',
+    })
+    expect(manager.read).toHaveBeenCalledWith({ workspaceId: 'workspace-1', path: 'README.md' }, signal)
     await ctx.fiber.dispose()
   })
 })

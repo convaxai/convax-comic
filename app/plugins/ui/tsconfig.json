@@ -1,7 +1,9 @@
 {
   "extends": "../../../tsconfig.base.json",
   "compilerOptions": {
-    "rootDir": "."
+    "rootDir": ".",
+    "jsx": "react-jsx",
+    "lib": ["ES2024", "DOM", "DOM.Iterable"]
   },
-  "include": ["src/**/*.ts", "tests/**/*.ts", "tsdown.config.ts"]
+  "include": ["src/**/*.ts", "src/**/*.tsx", "tests/**/*.ts", "tests/**/*.tsx", "tsdown.config.ts"]
 }

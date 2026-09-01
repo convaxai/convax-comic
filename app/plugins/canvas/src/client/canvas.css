@@ -12,8 +12,8 @@
   --cvx-canvas-inset: var(--dsw-alias-bg-layer-3, #e8e5de);
   --cvx-canvas-line: var(--dsw-alias-border-l1, #dedbd4);
   --cvx-canvas-line-strong: var(--dsw-alias-border-l2, #cbc8c1);
-  --cvx-canvas-accent: #5c7a00;
-  --cvx-canvas-on-accent: #fff;
+  --cvx-canvas-accent: var(--cvx-beui-primary, #18181b);
+  --cvx-canvas-on-accent: var(--cvx-beui-primary-foreground, #fff);
   --cvx-canvas-accent-soft: color-mix(in oklab, var(--cvx-canvas-accent) 14%, var(--cvx-canvas-raised));
   --cvx-canvas-accent-border: color-mix(in oklab, var(--cvx-canvas-accent) 56%, var(--cvx-canvas-line-strong));
   --cvx-canvas-hover: color-mix(in oklab, var(--cvx-canvas-accent) 8%, var(--cvx-canvas-raised));
@@ -28,14 +28,6 @@
   --cvx-canvas-motion-normal: var(--ds-transition-duration-normal, 160ms);
   --cvx-canvas-motion-slow: var(--ds-transition-duration-slow, 250ms);
   --cvx-canvas-ease: var(--ds-ease-in-out, cubic-bezier(.25, .46, .45, .94));
-}
-
-body[data-ds-dark-theme] .cvxWorkbench,
-body[data-ds-dark-theme] .cvxCanvasOverlay,
-body[data-ds-dark-theme] .cvxCanvasLauncher,
-body[data-ds-dark-theme] .cvxTreeSection {
-  --cvx-canvas-accent: #c6f22d;
-  --cvx-canvas-on-accent: #111217;
 }
 
 .cvxWorkbench {
@@ -236,6 +228,7 @@ body[data-ds-dark-theme] .cvxTreeSection {
 }
 
 .cvxCanvasFileTree {
+  box-sizing: border-box;
   padding: 0 2px;
 }
 
@@ -575,6 +568,7 @@ body[data-ds-dark-theme] .cvxTreeSection {
   min-width: 0;
   min-height: 0;
   overflow: hidden;
+  outline: none;
   background:
     radial-gradient(circle at 50% -24%, color-mix(in oklab, var(--cvx-canvas-accent) 8%, transparent), transparent 38%),
     var(--cvx-canvas-base);

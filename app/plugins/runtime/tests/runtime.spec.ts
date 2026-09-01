@@ -1,5 +1,5 @@
 import { Context } from '@deepseek-ai/cordis'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import * as Runtime from '../src/index.ts'
 
 describe('appRuntime', () => {
@@ -19,6 +19,20 @@ describe('appRuntime', () => {
 
     await fiber.dispose()
     expect(ctx.get('appRuntime')).toBeUndefined()
+    await ctx.fiber.dispose()
+  })
+
+  it('rejects a duplicate provider instead of selecting one', async () => {
+    const ctx = new Context()
+    ctx.logger.error = vi.fn()
+    const first = await ctx.plugin(Runtime, { profile: 'first' })
+    const duplicate = ctx.plugin(Runtime, { profile: 'second' })
+
+    await expect(duplicate).rejects.toThrow(/service "appRuntime" has been registered/)
+    expect((ctx.get('appRuntime') as Runtime.AppRuntime).profile).toBe('first')
+
+    await duplicate.dispose()
+    await first.dispose()
     await ctx.fiber.dispose()
   })
 })

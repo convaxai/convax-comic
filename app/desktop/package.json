@@ -41,7 +41,6 @@
     "@convax/project": "workspace:*",
     "@convax/runtime": "workspace:*",
     "@convax/sqlite-runtime": "workspace:*",
-    "@convax/test-consumer": "workspace:*",
     "@convax/ui": "workspace:*",
     "@deepseek-ai/cordis": "4.0.1",
     "@deepseek-ai/cordis-plugin-group": "1.0.1",

@@ -2,6 +2,7 @@ import { readFile } from 'node:fs/promises'
 import { describe, expect, it } from 'vitest'
 
 const css = await readFile(new URL('../src/client/canvas.css', import.meta.url), 'utf8')
+const viewSource = await readFile(new URL('../src/client/CanvasView.tsx', import.meta.url), 'utf8')
 
 function rule(selector: string): string {
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')
@@ -17,6 +18,7 @@ describe('Canvas viewport CSS contract', () => {
     expect(rule('.cvxCanvasStage')).toMatch(/height:\s*100%/u)
     expect(rule('.cvxCanvasFlow')).toMatch(/height:\s*100%/u)
     expect(rule('.cvxCanvasStage')).toMatch(/overflow:\s*hidden/u)
+    expect(rule('.cvxCanvasStage')).toMatch(/outline:\s*none/u)
   })
 
   it('uses the entire center surface while preserving a native draggable titlebar', () => {
@@ -27,6 +29,14 @@ describe('Canvas viewport CSS contract', () => {
     expect(rule('.cvxCanvasFloatingTitle')).toMatch(/position:\s*absolute/u)
     expect(rule('.cvxCanvasFloatingTitle')).toMatch(/top:\s*20px/u)
     expect(rule('.cvxCanvasToolbar')).toMatch(/-webkit-app-region:\s*no-drag/u)
+  })
+
+  it('keeps the nested Canvases tree inside its sidebar width and host theme', () => {
+    expect(rule('.cvxCanvasFileTree')).toMatch(/box-sizing:\s*border-box/u)
+    expect(rule('.cvxWorkbench,\n.cvxCanvasOverlay,\n.cvxCanvasLauncher,\n.cvxTreeSection')).toMatch(/--cvx-canvas-accent:\s*var\(--cvx-beui-primary, #18181b\)/u)
+    expect(css).not.toMatch(/#5c7a00|#c6f22d/u)
+    expect(viewSource).not.toContain('BEUI_THEME_CSS')
+    expect(viewSource).not.toContain('BEUI_COMPONENT_CSS')
   })
 
   it('only shows the grab cursor while Space panning is active', () => {

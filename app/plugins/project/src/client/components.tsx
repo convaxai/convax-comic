@@ -1,16 +1,21 @@
-import { Button, BEUI_COMPONENT_CSS, BEUI_THEME_CSS, FileTree, FileTreeFile, FileTreeFolder } from '@convax/beui'
+import { Button, FileTree, FileTreeFile, FileTreeFolder, Select } from '@convax/beui'
 import {
   useEffect,
   useRef,
   useState,
   useSyncExternalStore,
   type CSSProperties,
+  type DragEvent as ReactDragEvent,
   type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
   type ReactElement,
   type ReactNode,
 } from 'react'
-import type { ProjectFileEntry } from '../contracts.js'
+import {
+  PROJECT_FILE_DRAG_MIME,
+  encodeProjectFileDragPayload,
+  type ProjectFileEntry,
+} from '../contracts.js'
 import { ComicProjectRuntime } from './runtime.js'
 import {
   DEFAULT_AGENT_WIDTH,
@@ -30,7 +35,7 @@ import css from './styles.css?inline'
 type RenderSlot = (name: string, owner: Record<string, unknown>) => ReactNode
 
 export function ProjectStyles(): ReactElement {
-  return <><style>{BEUI_THEME_CSS}</style><style>{BEUI_COMPONENT_CSS}</style><style>{css}</style></>
+  return <style>{css}</style>
 }
 
 export interface ProjectShellProps {
@@ -212,7 +217,7 @@ export function ProjectShell({ runtime, layout, renderSlot }: ProjectShellProps)
           aria-label="Expand Agent panel"
           title="Expand Agent panel"
           onClick={() => { layout.toggleAgent() }}
-        ><PanelRightIcon open={false} size={17} /></button>
+        ><PanelRightIcon size={16} /></button>
       )}
       <div className="cvxProjectOverlay">{renderSlot('shell.overlay', {})}</div>
     </div>
@@ -233,6 +238,7 @@ function visibleFileCount(
 function fileTreeNodes(
   parent: string,
   directories: Readonly<Record<string, { readonly entries: readonly ProjectFileEntry[] }>>,
+  workspaceId: string,
 ): ReactNode {
   return (directories[parent]?.entries ?? []).map(entry => {
     const icon = ({ open }: { readonly open: boolean }): ReactNode => (
@@ -241,7 +247,7 @@ function fileTreeNodes(
     if (entry.kind === 'directory') {
       return (
         <FileTreeFolder key={entry.path} value={entry.path} name={entry.name} icon={icon}>
-          {fileTreeNodes(entry.path, directories)}
+          {fileTreeNodes(entry.path, directories, workspaceId)}
         </FileTreeFolder>
       )
     }
@@ -252,6 +258,15 @@ function fileTreeNodes(
         name={entry.name}
         icon={icon}
         disabled={entry.kind === 'symlink'}
+        draggable={entry.kind === 'file'}
+        onDragStart={(event: ReactDragEvent<HTMLButtonElement>) => {
+          event.dataTransfer.clearData()
+          event.dataTransfer.effectAllowed = 'copy'
+          event.dataTransfer.setData(PROJECT_FILE_DRAG_MIME, encodeProjectFileDragPayload({
+            workspaceId,
+            path: entry.path,
+          }))
+        }}
       />
     )
   })
@@ -294,14 +309,15 @@ export function ProjectNavigator({ runtime, wide, expandSidebar, renderSlot }: P
     <div className="cvxProjectNavigator">
       <ProjectStyles />
       <div className="cvxProjectSelector">
-        <select
-          aria-label="Active project"
-          value={snapshot.activeWorkspaceId ?? ''}
-          onChange={(event) => { if (event.target.value !== '') run(runtime.switchWorkspace(event.target.value)) }}
-        >
-          {snapshot.workspaces.length === 0 && <option value="">No projects</option>}
-          {snapshot.workspaces.map(workspace => <option key={workspace.workspaceId} value={workspace.workspaceId}>{workspace.title}</option>)}
-        </select>
+        <Select
+          className="cvxProjectWorkspaceSelect"
+          ariaLabel="Active project"
+          value={snapshot.activeWorkspaceId}
+          options={snapshot.workspaces.map(workspace => ({ value: workspace.workspaceId, label: workspace.title }))}
+          placeholder="No projects"
+          disabled={snapshot.workspaces.length === 0}
+          onValueChange={(workspaceId) => { run(runtime.switchWorkspace(workspaceId)) }}
+        />
         <Button className="cvxProjectButton" variant="ghost" size="icon" aria-label="Add project" title="Add project" onClick={() => { run(runtime.addProject()) }}><PlusIcon size={16} /></Button>
       </div>
       {actionError !== undefined && <div className="cvxProjectTreeStatus" role="alert">{actionError}</div>}
@@ -326,7 +342,7 @@ export function ProjectNavigator({ runtime, wide, expandSidebar, renderSlot }: P
             onExpandedChange={changeExpanded}
             className="cvxProjectFileTree"
           >
-            {fileTreeNodes('', snapshot.directories)}
+            {snapshot.activeWorkspaceId !== undefined && fileTreeNodes('', snapshot.directories, snapshot.activeWorkspaceId)}
           </FileTree>
         </div>
       </section>
@@ -357,7 +373,7 @@ export function WorkbenchAgentPanel({ collapsed, detailsOpen, toggleAgent, rende
             aria-label="Collapse Agent panel"
             title="Collapse Agent panel"
             onClick={toggleAgent}
-          ><PanelRightIcon open size={16} /></Button>
+          ><PanelRightIcon size={16} /></Button>
         </span>
       </header>
       <div className="cvxProjectAgentBody">

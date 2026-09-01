@@ -62,9 +62,8 @@ sibling checkout.
 
 - `compatibility`: upstream client roster, mandatory Host auth/command/desktop
   boundaries only.
-- `default`: compatibility plus `appRuntime`, lifecycle consumer, and the
-  minimal Convax Comic brand-slot replacement. Most screens are still the
-  upstream DSH Client until Comic UI plugins replace them.
+- `default`: compatibility plus `appRuntime` and the Convax Comic Project,
+  Canvas, and UI plugins. Product UI replaces only documented upstream slots.
 - Agent mode is limited to the read-only `standard` / `code` roster; unsafe or
   user-authored preset compositions cannot bypass the Host permission posture.
 - Product configuration is pure-data YAML in `app/profiles/`.

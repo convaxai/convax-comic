@@ -51,6 +51,24 @@ export interface CanvasMediaPolicy {
   readonly image: { readonly mimeTypes: readonly string[]; readonly maxBytes: number }
 }
 export interface CanvasMediaInput { readonly src: string; readonly name?: string; readonly mimeType?: string }
+export type CanvasProjectFileContent =
+  | {
+    readonly kind: 'image'
+    readonly path: string
+    readonly name: string
+    readonly size: number
+    readonly mimeType: string
+    readonly dataBase64: string
+  }
+  | {
+    readonly kind: 'text'
+    readonly path: string
+    readonly name: string
+    readonly size: number
+    readonly mimeType: string
+    readonly text: string
+  }
+export type CanvasProjectFileReader = (path: string, signal: AbortSignal) => Promise<CanvasProjectFileContent>
 export interface CanvasCreateNodeInput {
   readonly kind: CanvasCreateNodeKind
   readonly position: ComicCanvasPoint

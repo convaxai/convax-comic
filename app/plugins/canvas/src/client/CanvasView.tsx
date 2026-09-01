@@ -1,3 +1,4 @@
+import { PROJECT_FILE_DRAG_MIME, parseProjectFileDragPayload } from '@convax/project/contracts'
 import {
   Background,
   BackgroundVariant,
@@ -21,11 +22,7 @@ import {
   type ReactFlowInstance,
   type Viewport,
 } from '@xyflow/react'
-import {
-  BEUI_COMPONENT_CSS,
-  BEUI_THEME_CSS,
-  Button,
-} from '@convax/beui'
+import { Button } from '@convax/beui'
 import {
   createContext,
   memo,
@@ -165,7 +162,7 @@ export function PlusIcon(props: IconProps): ReactElement {
 export function CanvasStyles(): ReactElement {
   return (
     <style data-convax-canvas-style>
-      {flowCss}{'\n'}{BEUI_THEME_CSS}{'\n'}{BEUI_COMPONENT_CSS}{'\n'}{canvasCss}
+      {flowCss}{'\n'}{canvasCss}
     </style>
   )
 }
@@ -457,6 +454,12 @@ function createInputFromDrop(payload: ComicCanvasDropPayload, position: ComicCan
   throw new TypeError('video nodes are not supported by Convax Comic')
 }
 
+export function projectFilePathFromDrop(value: string, workspaceId: string): string {
+  const payload = parseProjectFileDragPayload(value)
+  if (payload.workspaceId !== workspaceId) throw new Error('Project file belongs to a different workspace')
+  return payload.path
+}
+
 export function promptNodeTitle(prompt: string): string {
   const compact = prompt.trim().replace(/\s+/g, ' ')
   const characters = Array.from(compact)
@@ -465,7 +468,7 @@ export function promptNodeTitle(prompt: string): string {
 
 function isSupportedDrop(dataTransfer: DataTransfer): boolean {
   const types = Array.from(dataTransfer.types)
-  return types.includes('Files') || types.includes(CANVAS_DROP_MIME)
+  return types.includes('Files') || types.includes(PROJECT_FILE_DRAG_MIME) || types.includes(CANVAS_DROP_MIME)
 }
 
 export interface CanvasViewProps {
@@ -762,6 +765,9 @@ function CanvasSurface({ workspace, snapshot }: {
       let ids: readonly string[]
       if (event.dataTransfer.types.includes('Files') && event.dataTransfer.files.length > 0) {
         ids = await workspace.addDroppedFiles(event.dataTransfer.files, position)
+      } else if (event.dataTransfer.types.includes(PROJECT_FILE_DRAG_MIME)) {
+        const path = projectFilePathFromDrop(event.dataTransfer.getData(PROJECT_FILE_DRAG_MIME), workspace.workspaceId)
+        ids = await workspace.addProjectFile(path, position)
       } else {
         const raw = event.dataTransfer.getData(CANVAS_DROP_MIME)
         const payload = parseCanvasDropPayload(raw)
