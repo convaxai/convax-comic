@@ -30,6 +30,12 @@ function target(path: string): Target {
   return { path, targetKey: path, displayPath: path }
 }
 
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((resolvePromise) => { resolve = resolvePromise })
+  return { promise, resolve }
+}
+
 function harness() {
   const root = '/workspace/project'
   const directories = new Set([root, `${root}/src`])
@@ -86,13 +92,20 @@ function harness() {
     },
   }
   const watcher = new FakeWatcher()
+  const watchers: FakeWatcher[] = []
+  const watchRoots: string[] = []
   const ctx = { logger: { warn: vi.fn() } }
   const workspaces = { get: (id: string) => id === 'workspace-1' ? { path: root } : undefined }
   const manager = new ProjectFilesManager(ctx as never, fs, workspaces as never, {
-    watcherFactory: () => watcher,
+    watcherFactory: (watchRoot) => {
+      const next = watchers.length === 0 ? watcher : new FakeWatcher()
+      watchers.push(next)
+      watchRoots.push(watchRoot)
+      return next
+    },
     coalesceMs: 0,
   })
-  return { manager, watcher, root }
+  return { manager, watcher, watchers, watchRoots, fs, root }
 }
 
 describe('ProjectFilesManager', () => {
@@ -112,6 +125,50 @@ describe('ProjectFilesManager', () => {
     await expect(manager.list({ leaseId: opened.leaseId, path: '../escape' })).rejects.toMatchObject({ code: 'INVALID_PATH' })
     await manager.closeLease(opened.leaseId)
     expect(watcher.closed).toBe(true)
+  })
+
+  it('watches only the root and directories that the client actually opens', async () => {
+    const { manager, watchRoots, watchers, root } = harness()
+    const opened = await manager.open({ workspaceId: 'workspace-1' })
+
+    expect(watchRoots).toEqual([root])
+    await manager.list({ leaseId: opened.leaseId, path: '' })
+    expect(watchRoots).toEqual([root])
+
+    await manager.list({ leaseId: opened.leaseId, path: 'src' })
+    expect(watchRoots).toEqual([root, `${root}/src`])
+
+    const changed = manager.wait({
+      leaseId: opened.leaseId,
+      afterSequence: opened.sequence,
+      timeoutMs: 1_000,
+    }, new AbortController().signal)
+    watchers[1]!.emit('all', 'change', `${root}/src/index.ts`)
+    await expect(changed).resolves.toEqual({ status: 'changed', sequence: 1, paths: ['src'], reset: false })
+
+    await manager.closeLease(opened.leaseId)
+    expect(watchers.every(active => active.closed)).toBe(true)
+  })
+
+  it('checks directory entries concurrently instead of serializing local metadata reads', async () => {
+    const { manager, fs } = harness()
+    const gate = deferred<void>()
+    const original = fs.lstat.bind(fs)
+    let active = 0
+    let peak = 0
+    vi.spyOn(fs, 'lstat').mockImplementation(async (...args) => {
+      active += 1
+      peak = Math.max(peak, active)
+      await gate.promise
+      try { return await original(...args) } finally { active -= 1 }
+    })
+    const opened = await manager.open({ workspaceId: 'workspace-1' })
+    const listing = manager.list({ leaseId: opened.leaseId, path: '' })
+
+    await vi.waitFor(() => { expect(peak).toBeGreaterThan(1) })
+    gate.resolve()
+    await listing
+    await manager.dispose()
   })
 
   it('reads supported text and image files through workspace-relative authority only', async () => {

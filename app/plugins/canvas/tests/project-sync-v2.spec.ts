@@ -217,9 +217,7 @@ describe('CanvasProjectSync V2', () => {
       ],
     })
     expect(remote.getProject).toHaveBeenCalledTimes(1)
-    expect(remote.getDocument).toHaveBeenCalledWith({
-      workspaceId: 'workspace-1', projectId: 'project-1', canvasId: 'canvas-a',
-    })
+    expect(remote.getDocument).not.toHaveBeenCalled()
     expect(remote.waiters.size).toBe(1)
     expect([...remote.waiters][0]?.canvasId).toBe('canvas-a')
 
@@ -355,6 +353,7 @@ describe('CanvasProjectSync V2', () => {
     expect(createdService.state.status).toBe('closed')
     expect(remote.waiters.size).toBe(1)
     expect([...remote.waiters][0]?.canvasId).toBe('canvas-b')
+    expect(remote.getDocument).not.toHaveBeenCalled()
     expect(coordinator.getSnapshot().activeCanvasId).toBe('canvas-b')
     await coordinator.dispose()
   })

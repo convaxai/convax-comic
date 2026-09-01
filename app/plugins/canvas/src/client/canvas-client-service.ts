@@ -54,6 +54,8 @@ export interface CanvasClientServiceOptions {
   readonly clientId?: string
   readonly source?: string
   readonly revisionWaitMs?: number
+  /** Authoritative document already carried by a project response; skips one bootstrap read. */
+  readonly initialDocument?: CanvasDocument
   readonly renderers?: CanvasRendererRegistry
   readonly fitView?: (nodeIds?: readonly NodeId[]) => void
   readonly setViewport?: (viewport: CanvasViewport) => void | Promise<void>
@@ -84,6 +86,7 @@ export class CanvasClientService implements CanvasClientApi {
   readonly #remote: CanvasRemotePort
   readonly #source: string
   readonly #revisionWaitMs: number
+  #initialDocument: CanvasDocument | undefined
   readonly #fitView: ((nodeIds?: readonly NodeId[]) => void) | undefined
   readonly #setViewportHook: ((viewport: CanvasViewport) => void | Promise<void>) | undefined
   readonly #ownsRenderers: boolean
@@ -117,6 +120,7 @@ export class CanvasClientService implements CanvasClientApi {
     this.clientId = options.clientId ?? defaultClientId()
     this.#source = options.source ?? '@convax/canvas'
     this.#revisionWaitMs = options.revisionWaitMs ?? DEFAULT_CANVAS_REVISION_WAIT_MS
+    this.#initialDocument = options.initialDocument
     if (!Number.isSafeInteger(this.#revisionWaitMs) || this.#revisionWaitMs < 1 || this.#revisionWaitMs > 30_000) {
       throw new Error('revisionWaitMs must be a safe integer between 1 and 30000')
     }
@@ -175,7 +179,9 @@ export class CanvasClientService implements CanvasClientApi {
     this.#error = undefined
     this.#publish(false)
     try {
-      const document = await this.#remote.getDocument(this.#identity(), this.#lifetimeAbort.signal)
+      const initialDocument = this.#initialDocument
+      this.#initialDocument = undefined
+      const document = initialDocument ?? await this.#remote.getDocument(this.#identity(), this.#lifetimeAbort.signal)
       this.#assertDocumentIdentity(document)
       this.#authoritative = document
       this.#projectOptimistic()
@@ -374,6 +380,7 @@ export class CanvasClientService implements CanvasClientApi {
     this.history.clear()
     this.#selectedNodes.clear()
     this.#selectedEdges.clear()
+    this.#initialDocument = undefined
     this.#authoritative = undefined
     this.#document = undefined
     this.#status = 'closed'
