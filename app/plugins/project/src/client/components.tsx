@@ -10,6 +10,7 @@ import {
   type PointerEvent as ReactPointerEvent,
   type ReactElement,
   type ReactNode,
+  type Ref,
 } from 'react'
 import {
   PROJECT_FILE_DRAG_MIME,
@@ -25,6 +26,7 @@ import {
   MIN_AGENT_WIDTH,
   MIN_CENTER_WIDTH,
   MIN_SIDEBAR_WIDTH,
+  SIDEBAR_RAIL_WIDTH,
   ProjectLayout,
   projectPanelWidthFromPointer,
   resolveProjectPanelColumns,
@@ -137,22 +139,40 @@ function ProjectResizeHandle({ side, value, min, max, onResize, onReset, onDragg
   )
 }
 
-export function ProjectShell({ runtime, layout, renderSlot }: ProjectShellProps): ReactElement {
-  const state = useSyncExternalStore(layout.subscribe, layout.getSnapshot, layout.getSnapshot)
-  const shellRef = useRef<HTMLDivElement>(null)
+function useObservedShellWidth(shellRef: { readonly current: HTMLDivElement | null }): number {
   const [shellWidth, setShellWidth] = useState(0)
-  const [resizing, setResizing] = useState<'sidebar' | 'agent'>()
   useEffect(() => {
     const shell = shellRef.current
     if (shell === null) return
-    const measure = (): void => { setShellWidth(shell.getBoundingClientRect().width) }
-    measure()
+    const update = (width: number): void => {
+      if (!Number.isFinite(width) || width <= 0) return
+      const next = Math.round(width)
+      setShellWidth(current => current === next ? current : next)
+    }
+    update(shell.getBoundingClientRect().width)
     if (typeof ResizeObserver === 'undefined') return
-    const observer = new ResizeObserver(measure)
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries.find(candidate => candidate.target === shell)
+      update(entry?.contentRect.width ?? shell.getBoundingClientRect().width)
+    })
     observer.observe(shell)
     return () => { observer.disconnect() }
-  }, [])
+  }, [shellRef])
+  return shellWidth
+}
+
+export interface ProjectShellViewProps extends ProjectShellProps {
+  readonly shellWidth: number
+  readonly shellRef?: Ref<HTMLDivElement>
+}
+
+/** Width-resolved shell view kept separate so concession behavior is component-testable. */
+export function ProjectShellView({ runtime, layout, renderSlot, shellWidth, shellRef }: ProjectShellViewProps): ReactElement {
+  const state = useSyncExternalStore(layout.subscribe, layout.getSnapshot, layout.getSnapshot)
+  const [resizing, setResizing] = useState<'sidebar' | 'agent'>()
   const columns = resolveProjectPanelColumns(state, shellWidth)
+  const sidebarCollapsed = columns.sidebar === SIDEBAR_RAIL_WIDTH
+  const agentCollapsed = columns.agent === 0
   const sidebarMax = shellWidth > 0
     ? Math.max(MIN_SIDEBAR_WIDTH, Math.min(MAX_SIDEBAR_WIDTH, shellWidth - columns.agent - MIN_CENTER_WIDTH))
     : MAX_SIDEBAR_WIDTH
@@ -170,25 +190,25 @@ export function ProjectShell({ runtime, layout, renderSlot }: ProjectShellProps)
     <div
       ref={shellRef}
       className="cvxProjectShell"
-      data-sidebar-open={state.sidebarOpen || undefined}
-      data-agent-open={state.agentOpen || undefined}
+      data-sidebar-collapsed={sidebarCollapsed || undefined}
+      data-agent-collapsed={agentCollapsed || undefined}
       data-resizing={resizing}
       style={style}
     >
       <ProjectStyles />
-      <aside className="cvxProjectSidebar">{renderSlot('sidebar', { collapsed: !state.sidebarOpen, width: columns.sidebar })}</aside>
+      <aside className="cvxProjectSidebar">{renderSlot('sidebar', { collapsed: sidebarCollapsed, width: columns.sidebar })}</aside>
       <main className="cvxProjectCenter">
         {renderSlot('workbench.center', { project: runtime })}
       </main>
-      <div className="cvxProjectAgentSeat" data-collapsed={!state.agentOpen || undefined}>
+      <div className="cvxProjectAgentSeat" data-collapsed={agentCollapsed || undefined}>
         {renderSlot('workbench.agent', {
-          collapsed: !state.agentOpen,
+          collapsed: agentCollapsed,
           detailsOpen: state.detailsOpen,
           width: columns.agent,
           toggleAgent: () => { layout.toggleAgent() },
         })}
       </div>
-      {state.sidebarOpen && (
+      {!sidebarCollapsed && (
         <ProjectResizeHandle
           side="sidebar"
           value={columns.sidebar}
@@ -199,7 +219,7 @@ export function ProjectShell({ runtime, layout, renderSlot }: ProjectShellProps)
           onDraggingChange={(dragging) => { markDragging('sidebar', dragging) }}
         />
       )}
-      {state.agentOpen && (
+      {!agentCollapsed && (
         <ProjectResizeHandle
           side="agent"
           value={columns.agent}
@@ -222,6 +242,12 @@ export function ProjectShell({ runtime, layout, renderSlot }: ProjectShellProps)
       <div className="cvxProjectOverlay">{renderSlot('shell.overlay', {})}</div>
     </div>
   )
+}
+
+export function ProjectShell(props: ProjectShellProps): ReactElement {
+  const shellRef = useRef<HTMLDivElement>(null)
+  const shellWidth = useObservedShellWidth(shellRef)
+  return <ProjectShellView {...props} shellWidth={shellWidth} shellRef={shellRef} />
 }
 
 function visibleFileCount(

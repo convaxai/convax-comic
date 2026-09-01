@@ -19,7 +19,8 @@ describe('Project shell visual contract', () => {
     expect(rule('.cvxProjectNavigator')).toMatch(/background:\s*var\(--cvx-project-sidebar\)/u)
     expect(rule('.cvxProjectChildren')).toMatch(/background:\s*var\(--cvx-project-sidebar\)/u)
     expect(rule('.cvxProjectChildren .cvxTreeSection > header')).toMatch(/background:\s*var\(--cvx-project-sidebar\)/u)
-    expect(rule('.cvxProjectChildren .cvxTreeItemActive')).toMatch(/background:\s*var\(--cvx-project-hover\)/u)
+    expect(rule('.cvxProjectChildren .cvxTreeSectionToggle')).toMatch(/font-weight:\s*inherit/u)
+    expect(css).not.toContain('.cvxProjectChildren .cvxTreeItem')
     expect(css).not.toMatch(/#5c7a00|#c6f22d/u)
   })
 

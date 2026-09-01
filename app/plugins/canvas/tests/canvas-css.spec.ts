@@ -33,10 +33,24 @@ describe('Canvas viewport CSS contract', () => {
 
   it('keeps the nested Canvases tree inside its sidebar width and host theme', () => {
     expect(rule('.cvxCanvasFileTree')).toMatch(/box-sizing:\s*border-box/u)
-    expect(rule('.cvxWorkbench,\n.cvxCanvasOverlay,\n.cvxCanvasLauncher,\n.cvxTreeSection')).toMatch(/--cvx-canvas-accent:\s*var\(--cvx-beui-primary, #18181b\)/u)
+    expect(rule('.cvxCanvasOverlay,\n.cvxCanvasLauncher,\n.cvxTreeSection')).toMatch(/--cvx-canvas-accent:\s*var\(--cvx-beui-primary, #18181b\)/u)
+    expect(rule('.cvxTreeSectionToggle')).toMatch(/display:\s*flex/u)
+    expect(rule('.cvxTreeAdd')).toMatch(/place-items:\s*center/u)
+    expect(rule('.cvxTreeError')).toMatch(/color:\s*var\(--cvx-canvas-danger\)/u)
     expect(css).not.toMatch(/#5c7a00|#c6f22d/u)
     expect(viewSource).not.toContain('BEUI_THEME_CSS')
     expect(viewSource).not.toContain('BEUI_COMPONENT_CSS')
+  })
+
+  it('does not retain selectors for the removed Canvas workbench shell', () => {
+    expect(css).not.toContain('.cvxWorkbench,')
+    expect(css).not.toContain('.cvxWorkbench {')
+    expect(css).not.toContain('.cvxWorkbench[')
+    expect(css).not.toContain('.cvxWorkbenchResizeHandle')
+    expect(css).not.toContain('.cvxWorkbenchAgent')
+    expect(css).not.toContain('.cvxAgentNewSession')
+    expect(css).not.toContain('.cvxTreeItem')
+    expect(css).not.toContain('.cvxProjectRail')
   })
 
   it('only shows the grab cursor while Space panning is active', () => {
