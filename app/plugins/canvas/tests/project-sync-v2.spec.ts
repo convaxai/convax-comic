@@ -164,12 +164,6 @@ class FakeWrappedRemote {
       deleteDocument: unsupported,
       applyPatch: this.applyPatch,
       waitForRevision: this.waitForRevision,
-      createNode: unsupported,
-      updateNode: unsupported,
-      removeNode: unsupported,
-      createEdge: unsupported,
-      updateEdge: unsupported,
-      removeEdge: unsupported,
     } as unknown as CanvasRemoteV2Api
   }
 

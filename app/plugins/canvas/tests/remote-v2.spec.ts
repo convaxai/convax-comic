@@ -76,9 +76,17 @@ describe('Canvas Remote V2 contract', () => {
     const methods = [
       'listProjects', 'createProject', 'getProject', 'setActiveCanvas', 'deleteProject',
       'listDocuments', 'createDocument', 'getDocument', 'renameDocument', 'deleteDocument',
-      'applyPatch', 'waitForRevision', 'createNode', 'updateNode', 'removeNode',
-      'createEdge', 'updateEdge', 'removeEdge',
+      'applyPatch', 'waitForRevision',
     ]
+    const removedWireNames = [
+      'canvasV2/createNode', 'canvasV2/updateNode', 'canvasV2/removeNode',
+      'canvasV2/createEdge', 'canvasV2/updateEdge', 'canvasV2/removeEdge',
+    ]
+    const wireNames = CANVAS_REMOTE_V2_DESCRIPTORS.map(
+      descriptor => `${descriptor.namespace}/${descriptor.method}`,
+    )
+    expect(CANVAS_REMOTE_V2_DESCRIPTORS).toHaveLength(12)
+    for (const removedWireName of removedWireNames) expect(wireNames).not.toContain(removedWireName)
     expect(CANVAS_REMOTE_V2_DESCRIPTORS.map(descriptor => descriptor.method)).toEqual(methods)
     expect(CANVAS_REMOTE_V2_DESCRIPTORS.map(descriptor => descriptor.id)).toEqual(
       methods.map(method => `@convax/canvas#canvasV2/${method}`),
@@ -116,26 +124,34 @@ describe('Canvas Remote V2 contract', () => {
       extra: true,
     })).toThrow()
 
-    expect(() => CANVAS_REMOTE_V2_REQUEST_SCHEMAS.createNode.parse({
+    expect(() => CANVAS_REMOTE_V2_REQUEST_SCHEMAS.applyPatch.parse({
       ...documentIdentity,
       expectedRevision: 2,
       ...metadata,
-      node: { ...documentFixture().nodes['node-1'], kindVersion: 0 },
+      operations: [{
+        op: 'add',
+        path: '/nodes/node-1',
+        value: { ...documentFixture().nodes['node-1'], kindVersion: 0 },
+      }],
     })).toThrow()
 
     const dangerousData = JSON.parse('{"__proto__":{"polluted":true}}') as unknown
-    expect(() => CANVAS_REMOTE_V2_REQUEST_SCHEMAS.createNode.parse({
+    expect(() => CANVAS_REMOTE_V2_REQUEST_SCHEMAS.applyPatch.parse({
       ...documentIdentity,
       expectedRevision: 2,
       ...metadata,
-      node: { ...documentFixture().nodes['node-1'], data: dangerousData },
+      operations: [{
+        op: 'add',
+        path: '/nodes/node-1',
+        value: { ...documentFixture().nodes['node-1'], data: dangerousData },
+      }],
     })).toThrow()
 
     expect(() => CANVAS_REMOTE_V2_REQUEST_SCHEMAS.applyPatch.parse({
       ...documentIdentity,
       expectedRevision: 2,
       ...metadata,
-      operations: [{ op: 'replace', path: '/nodes/node-1/data', value: dangerousData }],
+      operations: [{ op: 'replace', path: '/nodes/node-1/data/payload', value: dangerousData }],
     })).toThrow()
 
     expect(() => CANVAS_REMOTE_V2_REQUEST_SCHEMAS.applyPatch.parse({
@@ -150,14 +166,6 @@ describe('Canvas Remote V2 contract', () => {
       ...metadata,
       operations: [],
     })).toThrow()
-    expect(() => CANVAS_REMOTE_V2_REQUEST_SCHEMAS.updateNode.parse({
-      ...documentIdentity,
-      expectedRevision: 2,
-      nodeId: 'node-1',
-      changes: {},
-      ...metadata,
-    })).toThrow()
-
     expect(() => CANVAS_REMOTE_V2_RESULT_SCHEMAS.getProject.parse({
       ...projectFixture(),
       extra: true,
@@ -168,26 +176,19 @@ describe('Canvas Remote V2 contract', () => {
     })).toThrow()
   })
 
-  it('accepts exact parser-backed project, document, node, edge, and patch values', () => {
+  it('accepts exact parser-backed project, document, and patch values', () => {
+    const document = documentFixture()
     expect(CANVAS_REMOTE_V2_RESULT_SCHEMAS.getProject.parse(projectFixture())).toEqual(projectFixture())
-    expect(CANVAS_REMOTE_V2_RESULT_SCHEMAS.getDocument.parse(documentFixture())).toEqual(documentFixture())
-    expect(() => CANVAS_REMOTE_V2_REQUEST_SCHEMAS.createNode.parse({
-      ...documentIdentity,
-      expectedRevision: 2,
-      ...metadata,
-      node: documentFixture().nodes['node-1'],
-    })).not.toThrow()
-    expect(() => CANVAS_REMOTE_V2_REQUEST_SCHEMAS.createEdge.parse({
-      ...documentIdentity,
-      expectedRevision: 2,
-      ...metadata,
-      edge: documentFixture().edges['edge-1'],
-    })).not.toThrow()
+    expect(CANVAS_REMOTE_V2_RESULT_SCHEMAS.getDocument.parse(document)).toEqual(document)
     expect(() => CANVAS_REMOTE_V2_REQUEST_SCHEMAS.applyPatch.parse({
       ...documentIdentity,
       expectedRevision: 2,
       ...metadata,
-      operations: [{ op: 'replace', path: '/nodes/node-1/data/text', value: 'Updated' }],
+      operations: [
+        { op: 'add', path: '/nodes/node-1', value: document.nodes['node-1'] },
+        { op: 'add', path: '/edges/edge-1', value: document.edges['edge-1'] },
+        { op: 'replace', path: '/nodes/node-1/data/text', value: 'Updated' },
+      ],
     })).not.toThrow()
   })
 })
@@ -209,12 +210,6 @@ describe('CanvasRemoteV2Service delegation', () => {
       deleteDocument: { ...documentIdentity, deleted: true },
       applyPatch: patchResult(),
       waitForRevision: { status: 'timeout' as const, revision: 2 },
-      createNode: patchResult(),
-      updateNode: patchResult(),
-      removeNode: patchResult(),
-      createEdge: patchResult(),
-      updateEdge: patchResult(),
-      removeEdge: patchResult(),
     }
     const spies = Object.fromEntries(Object.entries(results).map(([name, result]) => [
       name,
@@ -238,8 +233,8 @@ describe('CanvasRemoteV2Service delegation', () => {
         applyPatch: spies.applyPatch,
         waitForRevision: spies.waitForRevision,
       },
-      nodes: { create: spies.createNode, update: spies.updateNode, remove: spies.removeNode },
-      edges: { create: spies.createEdge, update: spies.updateEdge, remove: spies.removeEdge },
+      nodes: { create: vi.fn(), update: vi.fn(), remove: vi.fn() },
+      edges: { create: vi.fn(), update: vi.fn(), remove: vi.fn() },
       registerNodeType: vi.fn(),
       registerEdgeType: vi.fn(),
     } as unknown as CanvasHostApi
@@ -262,16 +257,13 @@ describe('CanvasRemoteV2Service delegation', () => {
       applyPatch: {
         ...documentIdentity,
         expectedRevision: 2,
-        operations: [{ op: 'replace', path: '/metadata/title', value: 'Renamed' }],
+        operations: [
+          { op: 'add', path: '/nodes/node-1', value: document.nodes['node-1']! },
+          { op: 'add', path: '/edges/edge-1', value: document.edges['edge-1']! },
+        ],
         ...metadata,
       } satisfies ApplyCanvasPatchRequest,
       waitForRevision: { ...documentIdentity, afterRevision: 2, timeoutMs: 100 },
-      createNode: { ...documentIdentity, expectedRevision: 2, node: document.nodes['node-1']!, ...metadata },
-      updateNode: { ...documentIdentity, expectedRevision: 2, nodeId: 'node-1', changes: { data: { text: 'Updated' } }, ...metadata },
-      removeNode: { ...documentIdentity, expectedRevision: 2, nodeId: 'node-1', ...metadata },
-      createEdge: { ...documentIdentity, expectedRevision: 2, edge: document.edges['edge-1']!, ...metadata },
-      updateEdge: { ...documentIdentity, expectedRevision: 2, edgeId: 'edge-1', changes: { data: { label: 'Updated' } }, ...metadata },
-      removeEdge: { ...documentIdentity, expectedRevision: 2, edgeId: 'edge-1', ...metadata },
     }
 
     try {
