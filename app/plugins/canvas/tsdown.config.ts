@@ -2,12 +2,18 @@ import { readFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { createHash } from 'node:crypto'
 import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'tsdown'
 
 const PACKAGE_NAME = '@convax/canvas'
 const INLINE_CSS_QUERY = '?inline'
 const INLINE_CSS_PREFIX = '\0convax-canvas-css:'
 const moduleRequire = createRequire(import.meta.url)
+const packageRoot = dirname(fileURLToPath(import.meta.url))
+const clientWorkspaceSources = new Map([
+  ['@convax/canvas-api', resolve(packageRoot, '../canvas-api/src/index.ts')],
+  ['@convax/project/contracts', resolve(packageRoot, '../project/src/contracts.ts')],
+])
 const inlineCssFiles = new Map<string, string>()
 
 function isClientExternal(specifier: string): boolean {
@@ -64,6 +70,11 @@ export default defineConfig([
       'import.meta.env': JSON.stringify({ MODE: process.env.NODE_ENV ?? 'production' }),
     },
     plugins: [{
+      name: 'convax-canvas-workspace-source',
+      resolveId(source: string) {
+        return clientWorkspaceSources.get(source) ?? null
+      },
+    }, {
       name: 'convax-canvas-css-inline',
       resolveId(source: string, importer: string | undefined) {
         if (!source.endsWith(INLINE_CSS_QUERY)) return null
