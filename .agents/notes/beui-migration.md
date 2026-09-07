@@ -21,6 +21,12 @@ Convax Comic 的默认产品 UI 迁移到 BeUI 的视觉与 Motion 交互语言�
 4. `@convax/ui` 经官方 `theme.overrideTokens` 生命周期 API 统一 Conversation、Settings、overlay 与上游控件色彩；完整替换 `conversation` 或 `sidebar.settings` 会同时移除上游拥有的子 Slot 声明，当前保留其业务 DOM，不做高风险壳重写。
 5. Electron 独立启动/故障页同步 BeUI 视觉，并保留安全与 IPC 契约。
 
+## 后续收口（2026-09-02）
+
+Agent panel 已采用 source-owned BeUI Chat App 窄壳与当前项目 history overlay，但仍不替换
+完整 `conversation` occupant；官方 `conversation` / `details` 子树保持挂载和业务权威。详见
+[`implemented/architecture/2026-09-02-BeUI-Chat-App-Agent-侧边栏.md`](implemented/architecture/2026-09-02-BeUI-Chat-App-Agent-侧边栏.md)。
+
 ## 验收
 
 - `corepack yarn check` 与 `git diff --check` 通过。

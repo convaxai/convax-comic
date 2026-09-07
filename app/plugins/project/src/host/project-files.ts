@@ -1,6 +1,10 @@
 import { Buffer } from 'node:buffer'
 import { randomUUID } from 'node:crypto'
+import { constants as fsConstants } from 'node:fs'
+import { open } from 'node:fs/promises'
+import type { IncomingMessage, ServerResponse } from 'node:http'
 import { dirname, extname, isAbsolute, relative, resolve, sep } from 'node:path'
+import type { Readable } from 'node:stream'
 import { watch, type FSWatcher } from 'chokidar'
 import type { Context } from '@deepseek-ai/cordis'
 import type { WorkspaceId, WorkspaceRegistry } from '@deepseek-ai/dsh-workspace'
@@ -9,6 +13,7 @@ import {
   PROJECT_FILES_RING_CAP,
   PROJECT_IMAGE_IMPORT_MAX_BYTES,
   PROJECT_TEXT_IMPORT_MAX_BYTES,
+  PROJECT_VIDEO_MEDIA_ROUTE,
   ProjectFilesError,
   assertProjectRelativePath,
   joinProjectPath,
@@ -17,9 +22,12 @@ import {
   type ListProjectFilesResult,
   type OpenProjectFilesRequest,
   type OpenProjectFilesResult,
+  type PreviewProjectFileRequest,
+  type PreviewProjectFileResult,
   type ProjectFileEntry,
   type ReadProjectFileRequest,
   type ReadProjectFileResult,
+  type ReleaseProjectFilePreviewResult,
   type WaitProjectFilesRequest,
   type WaitProjectFilesResult,
 } from '../contracts.js'
@@ -32,6 +40,9 @@ const NOISY_DIRECTORIES = new Set([
 const COALESCE_MS = 75
 const DEFAULT_LIMIT = 250
 const LSTAT_CONCURRENCY = 32
+const VIDEO_PREVIEW_LEASE_CAP = 8
+const VIDEO_PREVIEW_LEASE_TTL_MS = 2 * 60 * 1000
+const VIDEO_SIGNATURE_BYTES = 16
 
 const IMAGE_MIME_TYPES: Readonly<Record<string, string>> = Object.freeze({
   '.gif': 'image/gif',
@@ -39,6 +50,12 @@ const IMAGE_MIME_TYPES: Readonly<Record<string, string>> = Object.freeze({
   '.jpg': 'image/jpeg',
   '.png': 'image/png',
   '.webp': 'image/webp',
+})
+const VIDEO_MIME_TYPES: Readonly<Record<string, string>> = Object.freeze({
+  '.m4v': 'video/mp4',
+  '.mov': 'video/quicktime',
+  '.mp4': 'video/mp4',
+  '.webm': 'video/webm',
 })
 const TEXT_MIME_TYPES: Readonly<Record<string, string>> = Object.freeze({
   '.c': 'text/plain',
@@ -89,6 +106,13 @@ export interface ProjectFileSystem {
   }>>
 }
 
+export interface ProjectVideoFile {
+  stat(): Promise<{ readonly size: number; isFile(): boolean }>
+  read(buffer: Uint8Array, offset: number, length: number, position: number): Promise<{ readonly bytesRead: number }>
+  createReadStream(options: { readonly start: number; readonly end: number; readonly autoClose: false }): Readable
+  close(): Promise<void>
+}
+
 export interface WatcherLike {
   on(event: 'ready', listener: () => void): this
   on(event: 'error', listener: (error: unknown) => void): this
@@ -108,6 +132,17 @@ interface Lease {
   readonly id: string
   readonly workspaceId: string
   readonly state: WorkspaceWatchState
+}
+
+interface VideoPreviewLease {
+  readonly id: string
+  readonly file: ProjectVideoFile
+  readonly size: number
+  readonly mimeType: string
+  readonly activeResponses: Map<Readable, ServerResponse>
+  released: boolean
+  closed: boolean
+  timer: ReturnType<typeof setTimeout> | undefined
 }
 
 interface Waiter {
@@ -170,6 +205,7 @@ export class InvalidationCoalescer {
 export interface ProjectFilesManagerOptions {
   readonly watcherFactory?: WatcherFactory
   readonly coalesceMs?: number
+  readonly videoFileOpener?: (path: string) => Promise<ProjectVideoFile>
 }
 
 export class ProjectFilesManager {
@@ -178,9 +214,11 @@ export class ProjectFilesManager {
   readonly #workspaces: WorkspaceRegistry
   readonly #watcherFactory: WatcherFactory
   readonly #coalesceMs: number
+  readonly #videoFileOpener: (path: string) => Promise<ProjectVideoFile>
   readonly #states = new Map<string, WorkspaceWatchState>()
   readonly #openingStates = new Map<string, Promise<WorkspaceWatchState>>()
   readonly #leases = new Map<string, Lease>()
+  readonly #videoPreviews = new Map<string, VideoPreviewLease>()
   readonly #lifecycle = new AbortController()
   #closing = false
 
@@ -190,6 +228,10 @@ export class ProjectFilesManager {
     this.#workspaces = workspaces
     this.#watcherFactory = options.watcherFactory ?? defaultWatcherFactory
     this.#coalesceMs = options.coalesceMs ?? COALESCE_MS
+    this.#videoFileOpener = options.videoFileOpener ?? (async path => open(
+      path,
+      fsConstants.O_RDONLY | (fsConstants.O_NOFOLLOW ?? 0),
+    ))
   }
 
   async open(request: OpenProjectFilesRequest): Promise<OpenProjectFilesResult> {
@@ -257,6 +299,16 @@ export class ProjectFilesManager {
   }
 
   async read(request: ReadProjectFileRequest, signal: AbortSignal): Promise<ReadProjectFileResult> {
+    return this.#readFile(request, signal, false)
+  }
+
+  async preview(request: PreviewProjectFileRequest, signal: AbortSignal): Promise<PreviewProjectFileResult> {
+    return this.#readFile(request, signal, true)
+  }
+
+  async #readFile(request: ReadProjectFileRequest, signal: AbortSignal, allowVideo: false): Promise<ReadProjectFileResult>
+  async #readFile(request: PreviewProjectFileRequest, signal: AbortSignal, allowVideo: true): Promise<PreviewProjectFileResult>
+  async #readFile(request: ReadProjectFileRequest, signal: AbortSignal, allowVideo: boolean): Promise<PreviewProjectFileResult> {
     this.#assertOpen()
     if (typeof request.workspaceId !== 'string' || request.workspaceId.length === 0 || request.workspaceId.length > 256) {
       throw new ProjectFilesError('INVALID_WORKSPACE', 'workspaceId is invalid')
@@ -277,11 +329,16 @@ export class ProjectFilesManager {
     const extension = extname(request.path).toLocaleLowerCase('en-US')
     const imageMimeType = IMAGE_MIME_TYPES[extension]
     const textMimeType = TEXT_MIME_TYPES[extension]
-    if (imageMimeType === undefined && textMimeType === undefined) {
-      throw new ProjectFilesError('UNSUPPORTED_FILE_TYPE', 'only supported image and text files can be added to Canvas')
+    const videoMimeType = allowVideo ? VIDEO_MIME_TYPES[extension] : undefined
+    if (imageMimeType === undefined && textMimeType === undefined && videoMimeType === undefined) {
+      throw new ProjectFilesError(
+        'UNSUPPORTED_FILE_TYPE',
+        allowVideo ? 'only supported image, text, and video files can be previewed' : 'only supported image and text files can be added to Canvas',
+      )
     }
-    const kind = imageMimeType === undefined ? 'text' as const : 'image' as const
-    const mimeType = imageMimeType ?? textMimeType!
+    const kind = videoMimeType !== undefined ? 'video' as const : imageMimeType === undefined ? 'text' as const : 'image' as const
+    const mimeType = videoMimeType ?? imageMimeType ?? textMimeType!
+    if (kind === 'video') return this.#openVideoPreview(target, request.path, mimeType, activeSignal)
     const maxBytes = kind === 'image' ? PROJECT_IMAGE_IMPORT_MAX_BYTES : PROJECT_TEXT_IMPORT_MAX_BYTES
     if (info.size !== undefined && info.size > maxBytes) {
       throw new ProjectFilesError('FILE_TOO_LARGE', `project file exceeds the ${maxBytes} byte Canvas import limit`)
@@ -317,6 +374,157 @@ export class ProjectFilesManager {
       throw new ProjectFilesError('FILE_TOO_LARGE', `project text exceeds the ${PROJECT_TEXT_IMPORT_MAX_BYTES} character Canvas note limit`)
     }
     return { kind, path: request.path, name, size: bytes.byteLength, mimeType, text }
+  }
+
+  async #openVideoPreview(
+    target: ProjectFsTarget,
+    path: string,
+    mimeType: string,
+    signal: AbortSignal,
+  ): Promise<Extract<PreviewProjectFileResult, { readonly kind: 'video' }>> {
+    signal.throwIfAborted()
+    while (this.#videoPreviews.size >= VIDEO_PREVIEW_LEASE_CAP) {
+      const oldest = this.#videoPreviews.values().next().value as VideoPreviewLease | undefined
+      if (oldest === undefined) break
+      await this.#releaseVideoLease(oldest)
+    }
+    const file = await this.#videoFileOpener(this.#fs.processPath(target))
+    try {
+      const stats = await file.stat()
+      if (!stats.isFile() || !Number.isSafeInteger(stats.size) || stats.size < 1) {
+        throw new ProjectFilesError('NOT_FILE', 'project video path is not a regular file')
+      }
+      const signature = new Uint8Array(Math.min(VIDEO_SIGNATURE_BYTES, stats.size))
+      const { bytesRead } = await file.read(signature, 0, signature.byteLength, 0)
+      if (!matchesVideoSignature(signature.subarray(0, bytesRead), mimeType)) {
+        throw new ProjectFilesError('INVALID_VIDEO', 'project video content does not match its supported file type')
+      }
+      signal.throwIfAborted()
+      const id = randomUUID()
+      const lease: VideoPreviewLease = {
+        id,
+        file,
+        size: stats.size,
+        mimeType,
+        activeResponses: new Map(),
+        released: false,
+        closed: false,
+        timer: undefined,
+      }
+      this.#videoPreviews.set(id, lease)
+      this.#armVideoLease(lease)
+      return {
+        kind: 'video',
+        path,
+        name: path.split('/').at(-1)!,
+        size: stats.size,
+        mimeType,
+        previewId: id,
+        mediaUrl: `${PROJECT_VIDEO_MEDIA_ROUTE}/${id}`,
+      }
+    } catch (error) {
+      await file.close().catch(closeError => { this.#ctx.logger.warn(closeError) })
+      throw error
+    }
+  }
+
+  async releasePreview(previewId: string): Promise<ReleaseProjectFilePreviewResult> {
+    const lease = this.#videoPreviews.get(previewId)
+    if (lease === undefined) return { released: false }
+    await this.#releaseVideoLease(lease)
+    return { released: true }
+  }
+
+  async serveVideoPreview(request: IncomingMessage, response: ServerResponse): Promise<void> {
+    const method = request.method ?? 'GET'
+    if (method !== 'GET' && method !== 'HEAD') {
+      response.writeHead(405, { allow: 'GET, HEAD', 'cache-control': 'no-store' })
+      response.end()
+      return
+    }
+    const pathname = new URL(request.url ?? '/', 'http://loopback.invalid').pathname
+    const prefix = `${PROJECT_VIDEO_MEDIA_ROUTE}/`
+    const previewId = pathname.startsWith(prefix) ? pathname.slice(prefix.length) : ''
+    const lease = previewId !== '' && !previewId.includes('/') ? this.#videoPreviews.get(previewId) : undefined
+    if (lease === undefined || lease.released) {
+      response.writeHead(404, { 'cache-control': 'no-store' })
+      response.end()
+      return
+    }
+    const range = parseByteRange(request.headers.range, lease.size)
+    if (range === undefined) {
+      response.writeHead(416, {
+        'accept-ranges': 'bytes',
+        'cache-control': 'no-store',
+        'content-range': `bytes */${String(lease.size)}`,
+      })
+      response.end()
+      return
+    }
+    this.#armVideoLease(lease)
+    const partial = request.headers.range !== undefined
+    const length = range.end - range.start + 1
+    response.writeHead(partial ? 206 : 200, {
+      'accept-ranges': 'bytes',
+      'cache-control': 'no-store',
+      'content-length': String(length),
+      'content-type': lease.mimeType,
+      'cross-origin-resource-policy': 'same-origin',
+      ...(partial ? { 'content-range': `bytes ${String(range.start)}-${String(range.end)}/${String(lease.size)}` } : {}),
+      'x-content-type-options': 'nosniff',
+    })
+    if (method === 'HEAD') {
+      response.end()
+      return
+    }
+    const stream = lease.file.createReadStream({ start: range.start, end: range.end, autoClose: false })
+    lease.activeResponses.set(stream, response)
+    let finished = false
+    const finish = (): void => {
+      if (finished) return
+      finished = true
+      lease.activeResponses.delete(stream)
+    }
+    response.once('finish', finish)
+    response.once('close', () => {
+      stream.destroy()
+      finish()
+    })
+    stream.once('error', (error) => {
+      if (response.headersSent) response.destroy(error)
+      else {
+        response.writeHead(500, { 'cache-control': 'no-store' })
+        response.end()
+      }
+    })
+    stream.pipe(response)
+  }
+
+  #armVideoLease(lease: VideoPreviewLease): void {
+    if (lease.timer !== undefined) clearTimeout(lease.timer)
+    lease.timer = setTimeout(() => { void this.#releaseVideoLease(lease) }, VIDEO_PREVIEW_LEASE_TTL_MS)
+    lease.timer.unref?.()
+  }
+
+  async #releaseVideoLease(lease: VideoPreviewLease): Promise<void> {
+    if (!lease.released) {
+      lease.released = true
+      this.#videoPreviews.delete(lease.id)
+      if (lease.timer !== undefined) clearTimeout(lease.timer)
+      lease.timer = undefined
+    }
+    for (const [stream, response] of lease.activeResponses) {
+      stream.destroy()
+      response.destroy()
+    }
+    lease.activeResponses.clear()
+    await this.#closeVideoFile(lease)
+  }
+
+  async #closeVideoFile(lease: VideoPreviewLease): Promise<void> {
+    if (lease.closed) return
+    lease.closed = true
+    try { await lease.file.close() } catch (error) { this.#ctx.logger.warn(error) }
   }
 
   wait(request: WaitProjectFilesRequest, signal: AbortSignal): Promise<WaitProjectFilesResult> {
@@ -383,10 +591,14 @@ export class ProjectFilesManager {
     this.#closing = true
     this.#lifecycle.abort(new ProjectFilesError('CLOSED', 'project files service disposed'))
     const states = [...this.#states.values()]
+    const videoPreviews = [...this.#videoPreviews.values()]
     this.#states.clear()
     this.#openingStates.clear()
     this.#leases.clear()
-    await Promise.all(states.map(state => this.#closeState(state)))
+    await Promise.all([
+      ...states.map(state => this.#closeState(state)),
+      ...videoPreviews.map(lease => this.#releaseVideoLease(lease)),
+    ])
   }
 
   async #initializeState(workspaceId: string, workspacePath: string): Promise<WorkspaceWatchState> {
@@ -607,6 +819,23 @@ function isErrorCode(error: unknown, code: string): boolean {
   return typeof error === 'object' && error !== null && 'code' in error && error.code === code
 }
 
+function parseByteRange(header: string | undefined, size: number): { readonly start: number; readonly end: number } | undefined {
+  if (header === undefined) return { start: 0, end: size - 1 }
+  const match = /^bytes=(\d*)-(\d*)$/u.exec(header)
+  if (match === null || (match[1] === '' && match[2] === '')) return undefined
+  if (match[1] === '') {
+    const suffix = Number(match[2])
+    if (!Number.isSafeInteger(suffix) || suffix <= 0) return undefined
+    return { start: Math.max(0, size - suffix), end: size - 1 }
+  }
+  const start = Number(match[1])
+  const requestedEnd = match[2] === '' ? size - 1 : Number(match[2])
+  if (!Number.isSafeInteger(start) || !Number.isSafeInteger(requestedEnd) || start < 0 || start >= size || requestedEnd < start) {
+    return undefined
+  }
+  return { start, end: Math.min(size - 1, requestedEnd) }
+}
+
 function matchesImageSignature(bytes: Uint8Array, mimeType: string): boolean {
   if (mimeType === 'image/png') {
     return bytes.length >= 8
@@ -622,6 +851,17 @@ function matchesImageSignature(bytes: Uint8Array, mimeType: string): boolean {
     return bytes.length >= 12
       && String.fromCharCode(...bytes.subarray(0, 4)) === 'RIFF'
       && String.fromCharCode(...bytes.subarray(8, 12)) === 'WEBP'
+  }
+  return false
+}
+
+function matchesVideoSignature(bytes: Uint8Array, mimeType: string): boolean {
+  if (mimeType === 'video/webm') {
+    return bytes.length >= 4
+      && bytes[0] === 0x1a && bytes[1] === 0x45 && bytes[2] === 0xdf && bytes[3] === 0xa3
+  }
+  if (mimeType === 'video/mp4' || mimeType === 'video/quicktime') {
+    return bytes.length >= 12 && String.fromCharCode(...bytes.subarray(4, 8)) === 'ftyp'
   }
   return false
 }

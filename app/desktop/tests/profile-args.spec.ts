@@ -76,6 +76,7 @@ describe('desktop data boundaries', () => {
       PATH: '/bin',
       CONVAX_CONTROL_TOKEN: 't'.repeat(43),
       DSH_HOME: join(paths.userData, 'harness'),
+      DSH_TELEMETRY_MODE: 'DISABLED',
       CONVAX_PROJECTS_HOME: join(paths.userData, 'projects'),
     })
   })

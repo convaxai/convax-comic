@@ -4,7 +4,7 @@ import { EventEmitter } from 'node:events'
 import { join } from 'node:path'
 import { buildDshArgs, childEnvironment, type DesktopPaths } from './profile-args.js'
 import { RedactingFileLog, redactSecrets, type LaunchLog } from './redaction.js'
-import { normalizeLoopbackOrigin } from './security.js'
+import { normalizeBrowserAuthUrl, normalizeLoopbackOrigin } from './security.js'
 import type {
   DesktopProfile,
   LaunchContext,
@@ -53,7 +53,7 @@ export interface DshSupervisorOptions {
 
 export declare interface DshSupervisor {
   on(event: 'context', listener: (context: Readonly<LaunchContext>) => void): this
-  on(event: 'ready', listener: (context: Readonly<LaunchContext>) => void): this
+  on(event: 'ready', listener: (context: Readonly<LaunchContext>, browserAuthUrl: string) => void): this
   on(event: 'failed', listener: (error: Error) => void): this
 }
 
@@ -237,13 +237,22 @@ export class DshSupervisor extends EventEmitter {
       return
     }
 
+    const browserAuthUrl = normalizeBrowserAuthUrl(message.browserAuthUrl, origin)
+    if (browserAuthUrl === null) {
+      this.#suppressRestart = true
+      this.#status = 'failed'
+      this.emit('failed', new Error('auth-fence reported an invalid browser authentication URL'))
+      this.#signalTree(child, 'SIGKILL')
+      return
+    }
+
     this.#clearStartupTimer()
     this.#origin = origin
     this.#ready = true
     this.#status = 'ready'
     const context = this.getLaunchContext()
     this.emit('context', context)
-    this.emit('ready', context)
+    this.emit('ready', context, browserAuthUrl)
   }
 
   #handleClose(
@@ -342,7 +351,9 @@ export class DshSupervisor extends EventEmitter {
 function isReadyMessage(message: unknown): message is ReadyMessage {
   if (message === null || typeof message !== 'object') return false
   const candidate = message as Partial<ReadyMessage>
-  return candidate.type === 'convax:ready' && typeof candidate.origin === 'string'
+  return candidate.type === 'convax:ready'
+    && typeof candidate.origin === 'string'
+    && typeof candidate.browserAuthUrl === 'string'
 }
 
 function isStartupFailureMessage(message: unknown): message is StartupFailureMessage {

@@ -2,6 +2,7 @@ import {
   app,
   BrowserWindow,
   ipcMain,
+  net,
   session,
   shell,
   type IpcMainEvent,
@@ -27,6 +28,7 @@ import {
 } from './profile-materializer.js'
 import { resolveDesktopRuntimePaths, verifyIndependentNodeRuntime } from './runtime-paths.js'
 import {
+  authenticateBrowserSession,
   installControlTokenInjector,
   isTrustedDesktopDocument,
   navigationDecision,
@@ -83,8 +85,20 @@ async function showLoading(message: string): Promise<void> {
   if (!mainWindow.isVisible()) mainWindow.show()
 }
 
-async function navigateToRuntime(context: Readonly<LaunchContext>): Promise<void> {
-  if (context.origin === null || mainWindow === null || mainWindow.isDestroyed()) return
+async function navigateToRuntime(
+  context: Readonly<LaunchContext>,
+  browserAuthUrl?: string,
+): Promise<void> {
+  if (context.origin === null || context.token === null || mainWindow === null || mainWindow.isDestroyed()) return
+  if (browserAuthUrl !== undefined) {
+    await authenticateBrowserSession(
+      options => net.request(options),
+      session.defaultSession,
+      browserAuthUrl,
+      context.origin,
+      context.token,
+    )
+  }
   await mainWindow.loadURL(context.origin)
   if (!mainWindow.isVisible()) mainWindow.show()
 }
@@ -202,8 +216,8 @@ async function startRuntime(): Promise<void> {
         void showLoading('DSH 正在安全启动，请稍候。')
       }
     })
-    supervisor.on('ready', (context) => {
-      void navigateToRuntime(context).then(() => {
+    supervisor.on('ready', (context, browserAuthUrl) => {
+      void navigateToRuntime(context, browserAuthUrl).then(() => {
         sendContext(context)
       }).catch(() => {
         void showFailure('运行时已就绪，但页面加载失败。')

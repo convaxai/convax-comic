@@ -14,6 +14,7 @@ import type { AddressInfo } from 'node:net'
 import type { Duplex } from 'node:stream'
 import { Service } from '@deepseek-ai/cordis'
 import type { Context } from '@deepseek-ai/cordis'
+import type { HostConnectionHandle } from '@deepseek-ai/dsh-client-connection'
 import {
   renderIndexInjections,
   type IndexInjection,
@@ -54,6 +55,7 @@ export interface Config {
 export interface ReadyMessage {
   type: 'convax:ready'
   origin: `http://${typeof LOOPBACK_HOST}:${number}`
+  browserAuthUrl: string
 }
 
 export interface StartupFailureMessage {
@@ -338,9 +340,16 @@ export class AuthenticatedWebServer extends Service {
 
   private sendReady(): void {
     if (typeof process.send !== 'function') return
+    const origin = `http://${LOOPBACK_HOST}:${String(this.port)}` as ReadyMessage['origin']
+    const connection = this.ctx.get('connection') as HostConnectionHandle | undefined
+    if (connection === undefined) {
+      this.sendStartupFailure(new Error('auth-fence: client connection authentication is unavailable'))
+      return
+    }
     const message: ReadyMessage = {
       type: 'convax:ready',
-      origin: `http://${LOOPBACK_HOST}:${String(this.port)}` as ReadyMessage['origin'],
+      origin,
+      browserAuthUrl: connection.authenticatedUrl(origin),
     }
     try {
       process.send(message)

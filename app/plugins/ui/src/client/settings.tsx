@@ -239,11 +239,10 @@ interface SettingsDescribeLike {
 }
 
 interface SettingsApiLike {
-  settings: {
-    openDocument(args: Record<string, never>): Promise<{
-      readonly result: { readonly ok: true } | { readonly ok: false; readonly error: { readonly message: string } }
-    }>
-  }
+  openSettingsDocument(signal?: AbortSignal): Promise<
+    { readonly ok: true; readonly value: unknown }
+    | { readonly ok: false; readonly error: { readonly message: string } }
+  >
 }
 
 export class SettingsDocumentController {
@@ -282,8 +281,8 @@ export class SettingsDocumentController {
     if (this.#disposed || this.#state.status !== 'ready' || this.#state.opening) return
     this.#update({ opening: true, error: null })
     try {
-      const response = await this.#api.settings.openDocument({})
-      if (!response.result.ok) throw new Error(response.result.error.message)
+      const response = await this.#api.openSettingsDocument()
+      if (!response.ok) throw new Error(response.error.message)
     } catch (error) {
       this.#update({ error: messageOf(error) })
     } finally {

@@ -8,6 +8,8 @@ import { ComicProjectRuntime, type SessionsLike, type WorkspacesLike } from './r
 import { NewSessionAction, ProjectNavigator, ProjectShell, WorkbenchAgentPanel } from './components.js'
 
 export * from '../contracts.js'
+export * from './agent-history.js'
+export * from './conversation-beui.js'
 export * from './layout.js'
 export * from './runtime.js'
 export * from './components.js'
@@ -16,6 +18,7 @@ interface SlotOptions {
   readonly name: string
   readonly id?: string
   readonly order?: number
+  readonly priority?: number
   readonly children?: Readonly<Record<string, { readonly kind: string; readonly scope: string }>>
   readonly inject?: () => Record<string, unknown>
 }
@@ -33,7 +36,14 @@ interface RemoteRoot {
 type ClientContext = Context & {
   slots: Slots
   remote: RemoteRoot
-  workspaces: WorkspacesLike
+  workspaces: {
+    readonly list: {
+      getSnapshot(): { readonly items: ReturnType<WorkspacesLike['list']['getSnapshot']>['items']; readonly archivedSessionIds?: readonly string[]; readonly phase: string }
+      subscribe(listener: () => void): () => void
+    }
+    create: WorkspacesLike['create']
+  }
+  uiWorkspace: Pick<WorkspacesLike, 'connectWorkspace' | 'pickDirectory'>
   sessions: SessionsLike
   reflect: Reflector
 }
@@ -44,7 +54,7 @@ declare module '@deepseek-ai/cordis' {
   }
 }
 
-export const inject = ['slots', 'remote', 'workspaces', 'sessions']
+export const inject = ['slots', 'remote', 'workspaces', 'sessions', 'uiWorkspace']
 
 type ScopeDisposer = () => void | Promise<void>
 
@@ -117,7 +127,20 @@ export async function apply(ctx: ClientContext): Promise<() => Promise<void>> {
   try {
     await ctx.inject(['remote.projectFiles'], async (remoteCtx) => {
       const consumer = remoteCtx as ClientContext
-      const activeRuntime = new ComicProjectRuntime(consumer.remote.projectFiles, consumer.workspaces, consumer.sessions)
+      // rc.1 separates pure Workspace state from UI navigation/directory policy.
+      const workspaces: WorkspacesLike = {
+        list: {
+          getSnapshot: () => {
+            const snapshot = consumer.workspaces.list.getSnapshot()
+            return { ...snapshot, baselinesReady: snapshot.phase === 'ready' }
+          },
+          subscribe: listener => consumer.workspaces.list.subscribe(listener),
+        },
+        create: input => consumer.workspaces.create(input),
+        connectWorkspace: id => consumer.uiWorkspace.connectWorkspace(id),
+        pickDirectory: () => consumer.uiWorkspace.pickDirectory(),
+      }
+      const activeRuntime = new ComicProjectRuntime(consumer.remote.projectFiles, workspaces, consumer.sessions)
       const layout = new ProjectLayout()
       const scopeBinding = new ComicProjectScopeBinding(consumer)
       let disposeLayout: ScopeDisposer | undefined
@@ -140,20 +163,23 @@ export async function apply(ctx: ClientContext): Promise<() => Promise<void>> {
             'workbench.agent': { kind: 'single', scope: 'root' },
             'shell.overlay': { kind: 'list', scope: 'root' },
           },
-          inject: () => ({ runtime: activeRuntime, layout }),
+          inject: () => ({ runtime: activeRuntime, layout, sessions: consumer.sessions }),
         }, ProjectShell))
         disposers.push(consumer.slots.inject('sidebar.workspaces', () => consumer.slots.register({
           name: 'sidebar.workspaces',
+          // SlotCore selects the lowest priority; shadow the official default (0).
+          priority: -100,
           children: { 'project.canvases': { kind: 'single', scope: 'root' } },
           inject: () => ({ runtime: activeRuntime }),
         }, ProjectNavigator)))
         disposers.push(consumer.slots.inject('workbench.agent', () => consumer.slots.register({
           name: 'workbench.agent',
           children: {
-            conversation: { kind: 'single', scope: 'session' },
+            conversation: { kind: 'single', scope: 'session-maybe' },
             details: { kind: 'single', scope: 'session' },
             'workbench.agent.header.action': { kind: 'list', scope: 'root' },
           },
+          inject: () => ({ runtime: activeRuntime, sessions: consumer.sessions, workspaces: consumer.workspaces }),
         }, WorkbenchAgentPanel)))
         disposers.push(consumer.slots.inject('workbench.agent.header.action', () => consumer.slots.register({
           name: 'workbench.agent.header.action', id: 'app-project-new-session', order: 100,

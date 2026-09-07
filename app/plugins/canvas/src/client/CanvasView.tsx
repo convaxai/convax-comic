@@ -99,22 +99,6 @@ function ImageIcon(props: IconProps): ReactElement {
   return <Icon {...props}><rect x="3" y="4" width="18" height="16" rx="2" /><circle cx="9" cy="9" r="1.5" /><path d="m4 17 5-5 4 4 2-2 5 5" /></Icon>
 }
 
-function DuplicateIcon(props: IconProps): ReactElement {
-  return <Icon {...props}><rect x="8" y="8" width="11" height="11" rx="2" /><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3" /></Icon>
-}
-
-function TrashIcon(props: IconProps): ReactElement {
-  return <Icon {...props}><path d="M4 7h16M9 7V4h6v3M7 7l1 14h8l1-14M10 11v6M14 11v6" /></Icon>
-}
-
-function SparklesIcon(props: IconProps): ReactElement {
-  return <Icon {...props}><path d="m12 3 1.25 3.75L17 8l-3.75 1.25L12 13l-1.25-3.75L7 8l3.75-1.25z" /><path d="m18 14 .75 2.25L21 17l-2.25.75L18 20l-.75-2.25L15 17l2.25-.75z" /><path d="m5 13 .65 1.85L7.5 15.5l-1.85.65L5 18l-.65-1.85-1.85-.65 1.85-.65z" /></Icon>
-}
-
-function DownloadIcon(props: IconProps): ReactElement {
-  return <Icon {...props}><path d="M12 4v12M7 11l5 5 5-5" /><path d="M5 15v5h14v-5" /></Icon>
-}
-
 function FocusIcon(props: IconProps): ReactElement {
   return <Icon {...props}><path d="M8 3H3v5M16 3h5v5M8 21H3v-5M16 21h5v-5" /><circle cx="12" cy="12" r="3" /></Icon>
 }
@@ -460,12 +444,6 @@ export function projectFilePathFromDrop(value: string, workspaceId: string): str
   return payload.path
 }
 
-export function promptNodeTitle(prompt: string): string {
-  const compact = prompt.trim().replace(/\s+/g, ' ')
-  const characters = Array.from(compact)
-  return characters.length <= 32 ? compact : `${characters.slice(0, 32).join('')}…`
-}
-
 function isSupportedDrop(dataTransfer: DataTransfer): boolean {
   const types = Array.from(dataTransfer.types)
   return types.includes('Files') || types.includes(PROJECT_FILE_DRAG_MIME) || types.includes(CANVAS_DROP_MIME)
@@ -493,8 +471,6 @@ function CanvasSurface({ workspace, snapshot }: {
 }): ReactElement {
   const stageRef = useRef<HTMLDivElement>(null)
   const flowRef = useRef<ReactFlowInstance<CanvasFlowNode, CanvasFlowEdge> | null>(null)
-  const dragDepth = useRef(0)
-  const [dragActive, setDragActive] = useState(false)
   const [miniMapVisible, setMiniMapVisible] = useState(true)
   const [edgesHidden, setEdgesHidden] = useState(false)
   const [snapEnabled, setSnapEnabled] = useState(true)
@@ -502,8 +478,6 @@ function CanvasSurface({ workspace, snapshot }: {
   const [layoutDirection, setLayoutDirection] = useState<CanvasLayoutDirection>('horizontal')
   const [zoomMenuOpen, setZoomMenuOpen] = useState(false)
   const [error, setError] = useState<string>()
-  const [prompt, setPrompt] = useState('')
-  const [composerPulse, setComposerPulse] = useState(false)
   const [enteringNodeIds, setEnteringNodeIds] = useState<ReadonlySet<string>>(() => new Set())
   const entryTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>())
   const interaction = useMemo(() => resolveCanvasInteractionPolicy(spacePanning), [spacePanning])
@@ -531,11 +505,6 @@ function CanvasSurface({ workspace, snapshot }: {
     for (const timer of entryTimers.current.values()) clearTimeout(timer)
     entryTimers.current.clear()
   }, [])
-  useEffect(() => {
-    if (!composerPulse) return undefined
-    const timer = setTimeout(() => { setComposerPulse(false) }, 720)
-    return () => { clearTimeout(timer) }
-  }, [composerPulse])
   const nodes = useMemo(
     () => toFlowNodes(snapshot, workspace, enteringNodeIds, finishEntry),
     [enteringNodeIds, finishEntry, snapshot.document.nodes, snapshot.selection.nodeIds, workspace],
@@ -583,26 +552,6 @@ function CanvasSurface({ workspace, snapshot }: {
       workspace.setSelection({ nodeIds: [id], edgeIds: [] })
     })
   }, [centerPosition, markEntering, run, snapshot.document.nodes.length, workspace])
-
-  const submitPrompt = useCallback((): void => {
-    const value = prompt.trim()
-    if (value.length === 0) return
-    run(() => {
-      const center = centerPosition()
-      const size = { width: 360, height: 220 }
-      const id = workspace.createNode({
-        kind: 'note',
-        title: promptNodeTitle(value),
-        text: value,
-        size,
-        position: { x: center.x - size.width / 2, y: center.y - size.height / 2 },
-      })
-      markEntering([id])
-      workspace.setSelection({ nodeIds: [id], edgeIds: [] })
-      setPrompt('')
-      setComposerPulse(true)
-    })
-  }, [centerPosition, markEntering, prompt, run, workspace])
 
   const duplicateSelection = useCallback((): void => {
     run(() => {
@@ -729,14 +678,6 @@ function CanvasSurface({ workspace, snapshot }: {
     })
   }, [run, workspace])
 
-  const onDragEnter = useCallback((event: DragEvent<HTMLDivElement>): void => {
-    if (!isSupportedDrop(event.dataTransfer)) return
-    event.preventDefault()
-    event.stopPropagation()
-    dragDepth.current += 1
-    setDragActive(true)
-  }, [])
-
   const onDragOver = useCallback((event: DragEvent<HTMLDivElement>): void => {
     if (!isSupportedDrop(event.dataTransfer)) return
     event.preventDefault()
@@ -744,20 +685,10 @@ function CanvasSurface({ workspace, snapshot }: {
     event.dataTransfer.dropEffect = 'copy'
   }, [])
 
-  const onDragLeave = useCallback((event: DragEvent<HTMLDivElement>): void => {
-    if (!isSupportedDrop(event.dataTransfer)) return
-    event.preventDefault()
-    event.stopPropagation()
-    dragDepth.current = Math.max(0, dragDepth.current - 1)
-    if (dragDepth.current === 0) setDragActive(false)
-  }, [])
-
   const onDrop = useCallback(async (event: DragEvent<HTMLDivElement>): Promise<void> => {
     if (!isSupportedDrop(event.dataTransfer)) return
     event.preventDefault()
     event.stopPropagation()
-    dragDepth.current = 0
-    setDragActive(false)
     const instance = flowRef.current
     if (instance === null) return
     const position = instance.screenToFlowPosition({ x: event.clientX, y: event.clientY })
@@ -795,9 +726,7 @@ function CanvasSurface({ workspace, snapshot }: {
           data-canvas-tool={spacePanning ? 'pan' : 'edit'}
           tabIndex={0}
           onPointerDownCapture={() => { stageRef.current?.focus({ preventScroll: true }) }}
-          onDragEnter={onDragEnter}
           onDragOver={onDragOver}
-          onDragLeave={onDragLeave}
           onDrop={(event) => { void onDrop(event) }}
         >
           <header className="cvxCanvasTitlebar">
@@ -808,29 +737,8 @@ function CanvasSurface({ workspace, snapshot }: {
           </header>
           <div className="cvxCanvasToolbar" role="toolbar" aria-label="画布工具">
             <div className="cvxCanvasTools">
-              <Button variant="ghost" size="sm" className="cvxCanvasButton" onClick={() => { createNode('note') }}><NoteIcon /><span className="cvxCanvasActionLabel">文本</span></Button>
-              <Button variant="ghost" size="sm" className="cvxCanvasButton" onClick={() => { createNode('image') }}><ImageIcon /><span className="cvxCanvasActionLabel">图片</span></Button>
-            </div>
-            <span className="cvxCanvasDivider" />
-            <div className="cvxCanvasSelectionActions">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="cvxCanvasIconButton"
-                aria-label="复制所选节点"
-                title="复制所选节点 (⌘/Ctrl+D)"
-                disabled={snapshot.selection.nodeIds.length === 0}
-                onClick={duplicateSelection}
-              ><DuplicateIcon /></Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="cvxCanvasIconButton cvxCanvasButtonDanger"
-                aria-label="删除所选内容"
-                title="删除所选内容"
-                disabled={snapshot.selection.nodeIds.length === 0 && snapshot.selection.edgeIds.length === 0}
-                onClick={deleteSelection}
-              ><TrashIcon /></Button>
+              <Button variant="ghost" size="sm" whileHover={{ scale: 1 }} className="cvxCanvasButton" onClick={() => { createNode('note') }}><NoteIcon /><span className="cvxCanvasActionLabel">文本</span></Button>
+              <Button variant="ghost" size="sm" whileHover={{ scale: 1 }} className="cvxCanvasButton" onClick={() => { createNode('image') }}><ImageIcon /><span className="cvxCanvasActionLabel">图片</span></Button>
             </div>
           </div>
           <ReactFlow<CanvasFlowNode, CanvasFlowEdge>
@@ -881,38 +789,6 @@ function CanvasSurface({ workspace, snapshot }: {
               />
             )}
           </ReactFlow>
-          <form
-            className="cvxCanvasComposer"
-            data-pulse={composerPulse || undefined}
-            data-canvas-shortcuts="ignore"
-            onSubmit={(event) => {
-              event.preventDefault()
-              submitPrompt()
-            }}
-          >
-            <div className="cvxCanvasComposerBeam">
-              <div className="cvxCanvasComposerSurface">
-                <span className="cvxCanvasComposerSpark" aria-hidden="true"><SparklesIcon size={17} /></span>
-                <input
-                  aria-label="快速创建灵感卡片"
-                  value={prompt}
-                  maxLength={4_000}
-                  placeholder="描述一个画面、分镜或创作灵感…"
-                  onChange={(event) => { setPrompt(event.currentTarget.value) }}
-                />
-                <button
-                  type="submit"
-                  className="cvxCanvasComposerSubmit"
-                  aria-label="创建灵感卡片"
-                  disabled={prompt.trim().length === 0}
-                  onAnimationEnd={() => { setComposerPulse(false) }}
-                >
-                  <SparklesIcon size={16} />
-                </button>
-              </div>
-            </div>
-            <span className="cvxCanvasComposerHint">Enter 创建文本节点</span>
-          </form>
           <ViewportToolbar
             zoom={snapshot.document.viewport.zoom}
             zoomMenuOpen={zoomMenuOpen}
@@ -934,11 +810,6 @@ function CanvasSurface({ workspace, snapshot }: {
             onZoomOut={zoomOut}
             onZoomPreset={zoomTo}
           />
-          {dragActive && (
-            <div className="cvxCanvasDropCue">
-              <div><DownloadIcon size={25} /><span>放下图片或 Canvas 节点</span></div>
-            </div>
-          )}
           {error !== undefined && (
             <div className="cvxCanvasError" role="alert">
               <span>{error}</span>
@@ -998,10 +869,11 @@ function ViewportToolbar(props: {
   }, [layoutMenuOpen, props.zoomMenuOpen, props.onZoomMenuChange])
   return (
     <div className="cvxViewportToolbar" role="toolbar" aria-label="画布视图控制">
-      <Button variant="ghost" size="icon" className="cvxCanvasIconButton" aria-label="适应画布" title="适应画布 (⌘/Ctrl+0)" onClick={props.onFit}><FocusIcon /></Button>
+      <Button variant="ghost" size="icon" whileHover={{ scale: 1 }} className="cvxCanvasIconButton" aria-label="适应画布" title="适应画布 (⌘/Ctrl+0)" onClick={props.onFit}><FocusIcon /></Button>
       <Button
         variant="ghost"
         size="icon"
+        whileHover={{ scale: 1 }}
         className="cvxCanvasIconButton"
         aria-label={props.edgesHidden ? '显示连线' : '隐藏连线'}
         aria-pressed={props.edgesHidden}
@@ -1013,6 +885,7 @@ function ViewportToolbar(props: {
         <Button
           variant="ghost"
           size="icon"
+          whileHover={{ scale: 1 }}
           className="cvxCanvasIconButton"
           aria-label="整理画布"
           title="整理画布 (⌥⇧F)"
@@ -1054,6 +927,7 @@ function ViewportToolbar(props: {
       <Button
         variant="ghost"
         size="icon"
+        whileHover={{ scale: 1 }}
         className="cvxCanvasIconButton"
         aria-label={props.snapEnabled ? '关闭网格吸附' : '开启网格吸附'}
         aria-pressed={props.snapEnabled}
@@ -1064,6 +938,7 @@ function ViewportToolbar(props: {
       <Button
         variant="ghost"
         size="icon"
+        whileHover={{ scale: 1 }}
         className="cvxCanvasIconButton"
         aria-label={props.miniMapVisible ? '隐藏小地图' : '显示小地图'}
         aria-pressed={props.miniMapVisible}
@@ -1072,7 +947,7 @@ function ViewportToolbar(props: {
         onClick={props.onMiniMapChange}
       ><MapIcon /></Button>
       <span className="cvxCanvasDivider" />
-      <Button variant="ghost" size="icon" className="cvxCanvasIconButton" aria-label="缩小" title="缩小 (⌘/Ctrl+-)" onClick={props.onZoomOut}><ZoomOutIcon /></Button>
+      <Button variant="ghost" size="icon" whileHover={{ scale: 1 }} className="cvxCanvasIconButton" aria-label="缩小" title="缩小 (⌘/Ctrl+-)" onClick={props.onZoomOut}><ZoomOutIcon /></Button>
       <div ref={zoomMenuRef} className="cvxZoomControl">
         <button
           type="button"
@@ -1101,7 +976,7 @@ function ViewportToolbar(props: {
           </div>
         )}
       </div>
-      <Button variant="ghost" size="icon" className="cvxCanvasIconButton" aria-label="放大" title="放大 (⌘/Ctrl+=)" onClick={props.onZoomIn}><ZoomInIcon /></Button>
+      <Button variant="ghost" size="icon" whileHover={{ scale: 1 }} className="cvxCanvasIconButton" aria-label="放大" title="放大 (⌘/Ctrl+=)" onClick={props.onZoomIn}><ZoomInIcon /></Button>
     </div>
   )
 }

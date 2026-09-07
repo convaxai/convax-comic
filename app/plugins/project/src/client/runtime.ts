@@ -22,6 +22,7 @@ export interface WorkspaceViewLike {
 export interface WorkspacesLike {
   readonly list: ObservableStore<{
     readonly items: readonly WorkspaceViewLike[]
+    readonly archivedSessionIds?: readonly string[]
     readonly baselinesReady: boolean
     readonly recentWorkspaceId?: string
   }>
@@ -30,8 +31,23 @@ export interface WorkspacesLike {
   pickDirectory(): Promise<string | null>
 }
 
+export interface SessionSummaryLike {
+  readonly id: string
+  readonly displayTitle: string
+  readonly blank: boolean
+  readonly running: boolean
+  readonly pendingInteraction?: unknown
+  readonly completed?: boolean
+  readonly updatedAt: number
+  readonly origin?: 'subagent'
+}
+
 export interface SessionsLike {
-  readonly list: ObservableStore<{ readonly current?: string }>
+  readonly list: ObservableStore<{
+    readonly ids?: readonly string[]
+    readonly byId?: Readonly<Record<string, SessionSummaryLike>>
+    readonly current?: string
+  }>
   open(sessionId: string): void
 }
 
@@ -135,6 +151,8 @@ export class ComicProjectRuntime {
       workspaceId,
       projectId: PROJECT_ROOT_ID,
       readFile: (path: string, signal: AbortSignal) => this.#readProjectFile(workspaceId, path, signal),
+      previewFile: (path: string, signal: AbortSignal) => this.#previewProjectFile(workspaceId, path, signal),
+      releasePreview: (previewId: string) => this.#releaseProjectPreview(previewId),
     })
   }
 
@@ -143,6 +161,22 @@ export class ComicProjectRuntime {
       throw new Error('project selection changed before the file could be added to Canvas')
     }
     return unwrapProjectRemote(await this.#remote.read({ workspaceId, path }, signal))
+  }
+
+  async #releaseProjectPreview(previewId: string): Promise<void> {
+    unwrapProjectRemote(await this.#remote.releasePreview({ previewId }))
+  }
+
+  async #previewProjectFile(workspaceId: string, path: string, signal: AbortSignal) {
+    if (this.#disposed || workspaceId !== this.#snapshot.activeWorkspaceId) {
+      throw new Error('project selection changed before the file preview loaded')
+    }
+    try {
+      return unwrapProjectRemote(await this.#remote.preview({ workspaceId, path }, signal))
+    } catch (error) {
+      if (!canFallbackToReadPreview(path, error)) throw error
+      return this.#readProjectFile(workspaceId, path, signal)
+    }
   }
 
   async switchWorkspace(workspaceId: string): Promise<void> {
@@ -380,3 +414,9 @@ export class ComicProjectRuntime {
 }
 
 function message(error: unknown): string { return error instanceof Error ? error.message : String(error) }
+
+function canFallbackToReadPreview(path: string, error: unknown): boolean {
+  if (/\.(?:m4v|mov|mp4|webm)$/iu.test(path)) return false
+  const detail = message(error)
+  return detail.includes('projectFiles/preview') && detail.includes('HTTP 404')
+}

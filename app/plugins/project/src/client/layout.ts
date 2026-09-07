@@ -19,6 +19,20 @@ export function projectPanelWidthFromPointer(
   return startWidth + (side === 'sidebar' ? delta : -delta)
 }
 
+export interface ProjectDetailsSessionTransition {
+  readonly lastSession: string | undefined
+  readonly closeDetails: boolean
+}
+
+/** Mirrors pinned DSH AppFrame: only a change between observed nonblank sessions closes details. */
+export function projectDetailsSessionTransition(
+  previous: string | undefined,
+  current: string | undefined,
+): ProjectDetailsSessionTransition {
+  if (current === undefined) return { lastSession: previous, closeDetails: false }
+  return { lastSession: current, closeDetails: previous !== undefined && previous !== current }
+}
+
 export interface ProjectLayoutSnapshot {
   readonly sidebarOpen: boolean
   readonly sidebarWidth: number

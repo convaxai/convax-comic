@@ -141,6 +141,7 @@ describe('DSH child supervisor', () => {
     calls[0]!.child.emit('message', {
       type: 'convax:ready',
       origin: 'http://127.0.0.1:41001',
+      browserAuthUrl: 'http://127.0.0.1:41001/?token=launch-a',
     })
     expect(supervisor.getLaunchContext()).toMatchObject({
       token: tokenA,
@@ -162,6 +163,7 @@ describe('DSH child supervisor', () => {
     calls[1]!.child.emit('message', {
       type: 'convax:ready',
       origin: 'http://127.0.0.1:41002',
+      browserAuthUrl: 'http://127.0.0.1:41002/?token=launch-b',
     })
     expect(supervisor.getLaunchContext()).toMatchObject({
       token: tokenB,

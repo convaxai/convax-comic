@@ -24,7 +24,7 @@
     "@convax/canvas-api": "workspace:*",
     "@convax/canvas-store-api": "workspace:*",
     "@convax/sqlite-runtime": "workspace:*",
-    "@deepseek-ai/cordis": "4.0.1"
+    "@deepseek-ai/cordis": "4.0.2"
   },
   "devDependencies": {
     "@types/node": "^22.20.0",

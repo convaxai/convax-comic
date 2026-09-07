@@ -1,6 +1,6 @@
 import { BEUI_COMPONENT_CSS, BEUI_THEME_CSS } from '@convax/beui/styles'
 import type { Context } from '@deepseek-ai/cordis'
-import type { ConnectionHandle } from '@deepseek-ai/dsh-client-connection/client'
+import type {} from '@deepseek-ai/dsh-api-remotes/client'
 import type { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import type { SettingsScopeBinder } from '@deepseek-ai/dsh-client-ui-settings/client'
 import type { ThemeRuntime } from '@deepseek-ai/dsh-client-ui-theme/client'
@@ -53,7 +53,6 @@ type ClientContext = Context & {
   slots: SlotRegistry
   theme: Pick<ThemeRuntime, 'getTheme'>
   locale: Pick<LocaleRuntime, 'bind' | 'getSnapshot' | 'register' | 'subscribe'>
-  connection: ConnectionHandle
   settingsScope: Pick<SettingsScopeBinder, 'describe'>
 }
 
@@ -131,7 +130,7 @@ function createSettingsSources(ctx: ClientContext): {
   return { sections }
 }
 
-export const inject = ['slots', 'theme', 'locale', 'connection', 'settingsScope']
+export const inject = ['slots', 'theme', 'locale', 'remote', 'settingsScope']
 
 export function apply(ctx: ClientContext): void {
   ctx.effect(() => {
@@ -156,11 +155,6 @@ export function apply(ctx: ClientContext): void {
 
   const t = ctx.locale.bind(SETTINGS_NAMESPACE) as SettingsTranslate
   const sources = createSettingsSources(ctx)
-  const documentController = ctx.connection.isLoopback
-    ? new SettingsDocumentController(ctx.connection.api, ctx.settingsScope.describe())
-    : undefined
-
-  ctx.effect(() => () => { documentController?.dispose() }, 'convax-settings: document action')
 
   ctx.slots.inject('shell.overlay', () =>
     ctx.slots.register({ name: 'shell.overlay', id: 'app-ui-beui-styles', order: -1_000 }, ConvaxBeuiStyles))
@@ -199,14 +193,22 @@ export function apply(ctx: ClientContext): void {
     locale: SETTINGS_NAMESPACE,
   }, SettingsCloseLabel))
 
-  if (documentController !== undefined) {
-    ctx.slots.inject('settings.action', () => ctx.slots.register({
-      name: 'settings.action',
-      id: 'app-ui-open-document',
-      order: 0,
-      locale: SETTINGS_NAMESPACE,
-      inject: () => ({ controller: documentController }),
-    }, SettingsDocumentAction))
+  if (ctx.remote.$host.isLoopback) {
+    ctx.inject(['remote.settings'], (scopedCtx) => {
+      const settingsCtx = scopedCtx as ClientContext
+      const documentController = new SettingsDocumentController(
+        settingsCtx.remote.settings,
+        settingsCtx.settingsScope.describe(),
+      )
+      settingsCtx.effect(() => () => { documentController.dispose() }, 'convax-settings: document action')
+      settingsCtx.slots.inject('settings.action', () => settingsCtx.slots.register({
+        name: 'settings.action',
+        id: 'app-ui-open-document',
+        order: 0,
+        locale: SETTINGS_NAMESPACE,
+        inject: () => ({ controller: documentController }),
+      }, SettingsDocumentAction))
+    })
   }
 
   ctx.slots.inject('settings.section', () => ctx.slots.register({

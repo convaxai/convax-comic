@@ -5,6 +5,7 @@ export const PROJECT_FILES_RING_CAP = 128
 export const PROJECT_FILE_DRAG_MIME = 'application/vnd.convax.project-file.v1+json' as const
 export const PROJECT_IMAGE_IMPORT_MAX_BYTES = 10 * 1024 * 1024
 export const PROJECT_TEXT_IMPORT_MAX_BYTES = 100_000
+export const PROJECT_VIDEO_MEDIA_ROUTE = '/convax/project-media' as const
 
 export type ReadProjectFileResult =
   | {
@@ -24,10 +25,24 @@ export type ReadProjectFileResult =
     readonly text: string
   }
 
+export type PreviewProjectFileResult =
+  | ReadProjectFileResult
+  | {
+    readonly kind: 'video'
+    readonly path: string
+    readonly name: string
+    readonly size: number
+    readonly mimeType: string
+    readonly previewId: string
+    readonly mediaUrl: string
+  }
+
 export interface ComicProjectScope {
   readonly workspaceId: string
   readonly projectId: typeof PROJECT_ROOT_ID
   readonly readFile: (path: string, signal: AbortSignal) => Promise<ReadProjectFileResult>
+  readonly previewFile: (path: string, signal: AbortSignal) => Promise<PreviewProjectFileResult>
+  readonly releasePreview: (previewId: string) => Promise<void>
 }
 
 export interface ProjectFileDragPayload {
@@ -74,6 +89,12 @@ export interface ReadProjectFileRequest {
   readonly workspaceId: string
   readonly path: string
 }
+export interface PreviewProjectFileRequest {
+  readonly workspaceId: string
+  readonly path: string
+}
+export interface ReleaseProjectFilePreviewRequest { readonly previewId: string }
+export interface ReleaseProjectFilePreviewResult { readonly released: boolean }
 export interface CloseProjectFilesRequest { readonly leaseId: string }
 export interface CloseProjectFilesResult { readonly closed: boolean }
 
@@ -81,6 +102,8 @@ export interface ProjectFilesApi {
   open(request: OpenProjectFilesRequest): Promise<OpenProjectFilesResult>
   list(request: ListProjectFilesRequest): Promise<ListProjectFilesResult>
   read(request: ReadProjectFileRequest, signal: AbortSignal): Promise<ReadProjectFileResult>
+  preview(request: PreviewProjectFileRequest, signal: AbortSignal): Promise<PreviewProjectFileResult>
+  releasePreview(request: ReleaseProjectFilePreviewRequest): Promise<ReleaseProjectFilePreviewResult>
   wait(request: WaitProjectFilesRequest, signal: AbortSignal): Promise<WaitProjectFilesResult>
   close(request: CloseProjectFilesRequest): Promise<CloseProjectFilesResult>
 }

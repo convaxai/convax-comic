@@ -1,10 +1,13 @@
-import { Button, FileTree, FileTreeFile, FileTreeFolder, Select } from '@convax/beui'
+import { AnimatedSidebar, AnimatedSidebarMenuItem, AnimatedSidebarSubmenu, Button, ChatApp, FileTree, FileTreeFile, FileTreeFolder, Select } from '@convax/beui'
 import {
   useEffect,
+  useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   useSyncExternalStore,
   type CSSProperties,
+  type ComponentType,
   type DragEvent as ReactDragEvent,
   type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
@@ -17,7 +20,15 @@ import {
   encodeProjectFileDragPayload,
   type ProjectFileEntry,
 } from '../contracts.js'
-import { ComicProjectRuntime } from './runtime.js'
+import { deriveAgentHistory } from './agent-history.js'
+import { mountBeuiConversationComposer } from './conversation-beui.js'
+import { ProjectFileName } from './file-name.js'
+import { ProjectFileHoverPreview, type ProjectFilePreviewAnchor } from './file-hover-preview.js'
+import {
+  ProjectFilePreviewController,
+  type ProjectFilePreviewSnapshot,
+} from './file-drag-preview.js'
+import { ComicProjectRuntime, type SessionsLike, type WorkspacesLike } from './runtime.js'
 import {
   DEFAULT_AGENT_WIDTH,
   DEFAULT_SIDEBAR_WIDTH,
@@ -28,13 +39,15 @@ import {
   MIN_SIDEBAR_WIDTH,
   SIDEBAR_RAIL_WIDTH,
   ProjectLayout,
+  projectDetailsSessionTransition,
   projectPanelWidthFromPointer,
   resolveProjectPanelColumns,
 } from './layout.js'
-import { ChevronRightIcon, PanelRightIcon, PlusIcon, ProjectEntryIcon } from './icons.js'
+import { HistoryIcon, PanelRightIcon, PlusIcon, ProjectEntryIcon, ProjectsIcon } from './icons.js'
 import css from './styles.css?inline'
 
 type RenderSlot = (name: string, owner: Record<string, unknown>) => ReactNode
+const useClientLayoutEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect
 
 export function ProjectStyles(): ReactElement {
   return <style>{css}</style>
@@ -43,6 +56,7 @@ export function ProjectStyles(): ReactElement {
 export interface ProjectShellProps {
   readonly runtime: ComicProjectRuntime
   readonly layout: ProjectLayout
+  readonly sessions: SessionsLike
   readonly renderSlot: RenderSlot
 }
 
@@ -161,7 +175,7 @@ function useObservedShellWidth(shellRef: { readonly current: HTMLDivElement | nu
   return shellWidth
 }
 
-export interface ProjectShellViewProps extends ProjectShellProps {
+export interface ProjectShellViewProps extends Omit<ProjectShellProps, 'sessions'> {
   readonly shellWidth: number
   readonly shellRef?: Ref<HTMLDivElement>
 }
@@ -196,7 +210,14 @@ export function ProjectShellView({ runtime, layout, renderSlot, shellWidth, shel
       style={style}
     >
       <ProjectStyles />
-      <aside className="cvxProjectSidebar">{renderSlot('sidebar', { collapsed: sidebarCollapsed, width: columns.sidebar })}</aside>
+      <AnimatedSidebar
+        aria-label="Project sidebar"
+        className="cvxProjectSidebar"
+        collapsed={sidebarCollapsed}
+        width={columns.sidebar}
+      >
+        {renderSlot('sidebar', { collapsed: sidebarCollapsed, width: columns.sidebar })}
+      </AnimatedSidebar>
       <main className="cvxProjectCenter">
         {renderSlot('workbench.center', { project: runtime })}
       </main>
@@ -244,9 +265,18 @@ export function ProjectShellView({ runtime, layout, renderSlot, shellWidth, shel
   )
 }
 
-export function ProjectShell(props: ProjectShellProps): ReactElement {
+export function ProjectShell({ sessions, ...props }: ProjectShellProps): ReactElement {
   const shellRef = useRef<HTMLDivElement>(null)
   const shellWidth = useObservedShellWidth(shellRef)
+  const sessionList = useSyncExternalStore(sessions.list.subscribe, sessions.list.getSnapshot, sessions.list.getSnapshot)
+  const current = sessionList.current
+  const detailsSession = current !== undefined && sessionList.byId?.[current]?.blank === false ? current : undefined
+  const lastDetailsSession = useRef(detailsSession)
+  useClientLayoutEffect(() => {
+    const transition = projectDetailsSessionTransition(lastDetailsSession.current, detailsSession)
+    lastDetailsSession.current = transition.lastSession
+    if (transition.closeDetails) props.layout.closeDetails()
+  }, [detailsSession, props.layout])
   return <ProjectShellView {...props} shellWidth={shellWidth} shellRef={shellRef} />
 }
 
@@ -261,19 +291,32 @@ function visibleFileCount(
   return count('')
 }
 
+interface ProjectFilePreviewHandlers {
+  readonly open: (entry: ProjectFileEntry, target: HTMLButtonElement, immediate: boolean) => void
+  readonly close: (entry: ProjectFileEntry) => void
+}
+
+function loadedProjectMedia(
+  directories: Readonly<Record<string, { readonly entries: readonly ProjectFileEntry[] }>>,
+): ProjectFileEntry[] {
+  return Object.values(directories).flatMap(directory => directory.entries.filter(entry => (
+    entry.kind === 'file' && /\.(?:gif|jpe?g|m4v|mov|mp4|png|webm|webp)$/iu.test(entry.name)
+  )))
+}
+
 function fileTreeNodes(
   parent: string,
   directories: Readonly<Record<string, { readonly entries: readonly ProjectFileEntry[] }>>,
   workspaceId: string,
+  preview: ProjectFilePreviewController,
+  previewSnapshot: ProjectFilePreviewSnapshot,
+  previewHandlers: ProjectFilePreviewHandlers,
 ): ReactNode {
   return (directories[parent]?.entries ?? []).map(entry => {
-    const icon = ({ open }: { readonly open: boolean }): ReactNode => (
-      <ProjectEntryIcon entry={entry} expanded={open} />
-    )
     if (entry.kind === 'directory') {
       return (
-        <FileTreeFolder key={entry.path} value={entry.path} name={entry.name} icon={icon}>
-          {fileTreeNodes(entry.path, directories, workspaceId)}
+        <FileTreeFolder key={entry.path} value={entry.path} name={entry.name}>
+          {fileTreeNodes(entry.path, directories, workspaceId, preview, previewSnapshot, previewHandlers)}
         </FileTreeFolder>
       )
     }
@@ -282,9 +325,14 @@ function fileTreeNodes(
         key={entry.path}
         value={entry.path}
         name={entry.name}
-        icon={icon}
+        label={<ProjectFileName name={entry.name} />}
+        icon={<ProjectEntryIcon entry={entry} expanded={false} previewUrl={previewSnapshot.thumbnails[entry.path]} />}
         disabled={entry.kind === 'symlink'}
         draggable={entry.kind === 'file'}
+        onPointerEnter={event => { previewHandlers.open(entry, event.currentTarget, false) }}
+        onPointerLeave={() => { previewHandlers.close(entry) }}
+        onFocus={event => { previewHandlers.open(entry, event.currentTarget, true) }}
+        onBlur={() => { previewHandlers.close(entry) }}
         onDragStart={(event: ReactDragEvent<HTMLButtonElement>) => {
           event.dataTransfer.clearData()
           event.dataTransfer.effectAllowed = 'copy'
@@ -292,6 +340,7 @@ function fileTreeNodes(
             workspaceId,
             path: entry.path,
           }))
+          preview.setDragImage(event.dataTransfer, entry)
         }}
       />
     )
@@ -307,17 +356,67 @@ export interface ProjectNavigatorProps {
 
 export function ProjectNavigator({ runtime, wide, expandSidebar, renderSlot }: ProjectNavigatorProps): ReactElement {
   const snapshot = useSyncExternalStore(runtime.subscribe, runtime.getSnapshot, runtime.getSnapshot)
+  const preview = useMemo(() => new ProjectFilePreviewController(() => runtime.scope()), [runtime])
+  const previewSnapshot = useSyncExternalStore(preview.subscribe, preview.getSnapshot, preview.getSnapshot)
+  const previewTimer = useRef<number | null>(null)
+  const [previewAnchor, setPreviewAnchor] = useState<ProjectFilePreviewAnchor>()
   const [actionError, setActionError] = useState<string>()
   const [filesExpanded, setFilesExpanded] = useState(true)
 
+  useEffect(() => () => {
+    if (previewTimer.current !== null) window.clearTimeout(previewTimer.current)
+    preview.dispose()
+  }, [preview])
+  useEffect(() => {
+    if (previewTimer.current !== null) window.clearTimeout(previewTimer.current)
+    previewTimer.current = null
+    setPreviewAnchor(undefined)
+    preview.reset()
+  }, [preview, snapshot.activeWorkspaceId, snapshot.sequence])
+  useEffect(() => {
+    if (wide) preview.preloadMedia(loadedProjectMedia(snapshot.directories))
+  }, [preview, snapshot.directories, snapshot.sequence, wide])
   useEffect(() => {
     const refresh = (): void => { void runtime.refreshVisibleDirectories() }
     window.addEventListener('focus', refresh)
     return () => { window.removeEventListener('focus', refresh) }
   }, [runtime])
 
+  const previewHandlers: ProjectFilePreviewHandlers = {
+    open(entry, target, immediate) {
+      if (entry.kind !== 'file') return
+      if (previewTimer.current !== null) window.clearTimeout(previewTimer.current)
+      preview.prime(entry)
+      const show = (): void => {
+        previewTimer.current = null
+        if (!target.isConnected) return
+        const rect = target.getBoundingClientRect()
+        setPreviewAnchor({ path: entry.path, top: rect.top, left: rect.left, right: rect.right })
+        preview.open(entry)
+      }
+      if (immediate) show()
+      else previewTimer.current = window.setTimeout(show, 180)
+    },
+    close(entry) {
+      if (previewTimer.current !== null) window.clearTimeout(previewTimer.current)
+      previewTimer.current = null
+      setPreviewAnchor(current => current?.path === entry.path ? undefined : current)
+      preview.close(entry.path)
+    },
+  }
+
   if (!wide) {
-    return <button className="cvxProjectButton" type="button" title="Projects" onClick={expandSidebar}>▤</button>
+    return (
+      <Button
+        className="cvxProjectButton cvxProjectRailButton"
+        variant="ghost"
+        size="icon"
+        type="button"
+        aria-label="Expand projects"
+        title="Projects"
+        onClick={expandSidebar}
+      ><ProjectsIcon size={18} /></Button>
+    )
   }
   const visibleFiles = visibleFileCount(snapshot.directories, snapshot.expanded)
   const run = (task: Promise<unknown>): void => {
@@ -348,50 +447,148 @@ export function ProjectNavigator({ runtime, wide, expandSidebar, renderSlot }: P
       </div>
       {actionError !== undefined && <div className="cvxProjectTreeStatus" role="alert">{actionError}</div>}
       <section className="cvxProjectFileSection" data-expanded={filesExpanded || undefined}>
-        <button
-          className="cvxProjectSectionHeader"
-          type="button"
-          aria-expanded={filesExpanded}
-          onClick={() => { setFilesExpanded(expanded => !expanded) }}
-        >
-          <ChevronRightIcon className="cvxProjectSectionChevron" size={16} />
-          <span>Files</span>
-          <small>{visibleFiles}</small>
-        </button>
-        <div className="cvxProjectFiles" hidden={!filesExpanded}>
-          {snapshot.phase === 'opening' && <div className="cvxProjectTreeStatus">Opening project…</div>}
-          {snapshot.phase === 'error' && <div className="cvxProjectTreeStatus" role="alert">{snapshot.error}</div>}
-          {snapshot.phase === 'ready' && visibleFiles === 0 && <div className="cvxProjectTreeStatus">This project is empty.</div>}
-          <FileTree
-            ariaLabel="Project files"
-            expandedIds={snapshot.expanded}
-            onExpandedChange={changeExpanded}
-            className="cvxProjectFileTree"
-          >
-            {snapshot.activeWorkspaceId !== undefined && fileTreeNodes('', snapshot.directories, snapshot.activeWorkspaceId)}
-          </FileTree>
-        </div>
+        <AnimatedSidebarMenuItem
+          className="cvxProjectSectionItem"
+          variant="section"
+          label="Files"
+          meta={visibleFiles}
+          expanded={filesExpanded}
+          onToggle={() => { setFilesExpanded(expanded => !expanded) }}
+        />
+        <AnimatedSidebarSubmenu expanded={filesExpanded} className="cvxProjectFilesMotion">
+          <div className="cvxProjectFiles">
+            {snapshot.phase === 'opening' && <div className="cvxProjectTreeStatus">Opening project…</div>}
+            {snapshot.phase === 'error' && <div className="cvxProjectTreeStatus" role="alert">{snapshot.error}</div>}
+            {snapshot.phase === 'ready' && visibleFiles === 0 && <div className="cvxProjectTreeStatus">This project is empty.</div>}
+            <FileTree
+              ariaLabel="Project files"
+              expandedIds={snapshot.expanded}
+              onExpandedChange={changeExpanded}
+              className="cvxProjectFileTree"
+            >
+              {snapshot.activeWorkspaceId !== undefined && fileTreeNodes(
+                '', snapshot.directories, snapshot.activeWorkspaceId, preview, previewSnapshot, previewHandlers,
+              )}
+            </FileTree>
+          </div>
+        </AnimatedSidebarSubmenu>
       </section>
       <div className="cvxProjectChildren">{renderSlot('project.canvases', { project: runtime })}</div>
+      <ProjectFileHoverPreview snapshot={previewSnapshot} anchor={previewAnchor} />
     </div>
   )
 }
 
 export interface WorkbenchAgentPanelProps {
+  readonly SessionProvider: ComponentType<{ readonly children?: ReactNode }>
   readonly collapsed: boolean
   readonly detailsOpen: boolean
   readonly toggleAgent: () => void
   readonly renderSlot: RenderSlot
+  readonly runtime: ComicProjectRuntime
+  readonly sessions: SessionsLike
+  readonly workspaces: WorkspacesLike
 }
 
-export function WorkbenchAgentPanel({ collapsed, detailsOpen, toggleAgent, renderSlot }: WorkbenchAgentPanelProps): ReactElement {
+interface AgentHistoryPanelProps {
+  readonly runtime: ComicProjectRuntime
+  readonly sessions: SessionsLike
+  readonly workspaces: WorkspacesLike
+  readonly onSelect: () => void
+}
+
+export function AgentHistoryPanel({ runtime, sessions, workspaces, onSelect }: AgentHistoryPanelProps): ReactElement {
+  const project = useSyncExternalStore(runtime.subscribe, runtime.getSnapshot, runtime.getSnapshot)
+  const sessionList = useSyncExternalStore(sessions.list.subscribe, sessions.list.getSnapshot, sessions.list.getSnapshot)
+  const workspaceList = useSyncExternalStore(workspaces.list.subscribe, workspaces.list.getSnapshot, workspaces.list.getSnapshot)
+  const rows = deriveAgentHistory({
+    workspaces: workspaceList.items,
+    ...(project.activeWorkspaceId === undefined ? {} : { activeWorkspaceId: project.activeWorkspaceId }),
+    ...(workspaceList.archivedSessionIds === undefined ? {} : { archivedSessionIds: workspaceList.archivedSessionIds }),
+    ...(sessionList.current === undefined ? {} : { currentSessionId: sessionList.current }),
+    ...(sessionList.byId === undefined ? {} : { sessionsById: sessionList.byId }),
+  })
+  const select = (sessionId: string): void => {
+    sessions.open(sessionId)
+    onSelect()
+  }
+  return (
+    <div className="cvxProjectAgentHistory">
+      <div className="cvxProjectAgentHistoryHeading">
+        <span>Recent conversations</span>
+        <small>{rows.length}</small>
+      </div>
+      <div className="cvxProjectAgentHistoryList" role="list">
+        {!workspaceList.baselinesReady && <div className="cvxProjectAgentHistoryEmpty">Loading conversations…</div>}
+        {workspaceList.baselinesReady && project.activeWorkspaceId === undefined && (
+          <div className="cvxProjectAgentHistoryEmpty">Select a project to view its conversations.</div>
+        )}
+        {workspaceList.baselinesReady && project.activeWorkspaceId !== undefined && rows.length === 0 && (
+          <div className="cvxProjectAgentHistoryEmpty">No conversations in this project yet.</div>
+        )}
+        {rows.map(row => {
+          const state = row.pending ? 'pending' : row.running ? 'running' : row.completed ? 'completed' : 'idle'
+          const stateLabel = row.pending ? 'Needs input' : row.running ? 'Running' : row.completed ? 'Completed' : undefined
+          return (
+            <div key={row.id} role="listitem" className="cvxProjectAgentHistoryItem">
+              <button
+                type="button"
+                className="cvxProjectAgentHistoryRow"
+                aria-current={row.selected ? 'page' : undefined}
+                onClick={() => { select(row.id) }}
+              >
+                <span className="cvxProjectAgentHistoryStatus" data-state={state} aria-hidden="true" />
+                <span className="cvxProjectAgentHistoryTitle">{row.title}</span>
+                {stateLabel !== undefined && <small className="cvxProjectAgentHistoryMeta">{stateLabel}</small>}
+              </button>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+export function WorkbenchAgentPanel({
+  SessionProvider,
+  collapsed,
+  detailsOpen,
+  toggleAgent,
+  renderSlot,
+  runtime,
+  sessions,
+  workspaces,
+}: WorkbenchAgentPanelProps): ReactElement {
+  const [historyOpen, setHistoryOpen] = useState(false)
+  const historyTriggerRef = useRef<HTMLButtonElement>(null)
+  const conversationRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const root = conversationRef.current
+    if (root === null) return
+    return mountBeuiConversationComposer(root)
+  }, [])
+  useEffect(() => {
+    if (detailsOpen) setHistoryOpen(false)
+  }, [detailsOpen])
+  const closeHistory = (): void => { setHistoryOpen(false) }
   return (
     <aside className="cvxProjectAgent" aria-label="Agent" aria-hidden={collapsed || undefined}>
       <ProjectStyles />
       <header>
-        <span>Agent</span>
+        <span className="cvxProjectAgentTitle">{historyOpen && !detailsOpen ? 'History' : 'Agent'}</span>
         <span className="cvxProjectAgentActions">
-          {renderSlot('workbench.agent.header.action', {})}
+          {renderSlot('workbench.agent.header.action', { onNavigate: closeHistory })}
+          <Button
+            ref={historyTriggerRef}
+            variant="ghost"
+            size="icon"
+            className="cvxProjectAgentToggle cvxProjectAgentHistoryToggle"
+            aria-label={historyOpen ? 'Close conversation history' : 'Open conversation history'}
+            aria-pressed={historyOpen}
+            title={historyOpen ? 'Close conversation history' : 'Conversation history'}
+            disabled={detailsOpen}
+            onClick={() => { setHistoryOpen(open => !open) }}
+          ><HistoryIcon size={16} /></Button>
           <Button
             variant="ghost"
             size="icon"
@@ -403,13 +600,34 @@ export function WorkbenchAgentPanel({ collapsed, detailsOpen, toggleAgent, rende
         </span>
       </header>
       <div className="cvxProjectAgentBody">
-        <div className="cvxProjectConversation" hidden={detailsOpen}>{renderSlot('conversation', {})}</div>
-        <div className="cvxProjectDetails" hidden={!detailsOpen}>{renderSlot('details', {})}</div>
+        <ChatApp
+          navigationOpen={historyOpen && !detailsOpen}
+          navigationLabel="Conversation history"
+          navigationTriggerRef={historyTriggerRef}
+          onNavigationOpenChange={setHistoryOpen}
+          navigation={<AgentHistoryPanel runtime={runtime} sessions={sessions} workspaces={workspaces} onSelect={closeHistory} />}
+        >
+          <div ref={conversationRef} className="cvxProjectConversation" hidden={detailsOpen}>{renderSlot('conversation', {})}</div>
+          <div className="cvxProjectDetails" hidden={!detailsOpen}><SessionProvider>{renderSlot('details', {})}</SessionProvider></div>
+        </ChatApp>
       </div>
     </aside>
   )
 }
 
-export function NewSessionAction({ runtime }: { readonly runtime: ComicProjectRuntime }): ReactElement {
-  return <Button variant="secondary" size="sm" className="cvxProjectAgentAction" onClick={() => { void runtime.newSession() }}>+ New session</Button>
+export function NewSessionAction({
+  runtime,
+  onNavigate,
+}: {
+  readonly runtime: ComicProjectRuntime
+  readonly onNavigate?: () => void
+}): ReactElement {
+  return (
+    <Button
+      variant="secondary"
+      size="sm"
+      className="cvxProjectAgentAction"
+      onClick={() => { void runtime.newSession().then(() => { onNavigate?.() }) }}
+    >+ New session</Button>
+  )
 }

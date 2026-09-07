@@ -11,7 +11,6 @@ const bundles = [
 ]
 const moduleLoaderSeeds = new Set([
   '@deepseek-ai/cordis',
-  '@deepseek-ai/dsh-client-runtime/client',
   'react',
   'react/jsx-runtime',
   'react-dom',

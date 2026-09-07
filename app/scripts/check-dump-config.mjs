@@ -116,7 +116,6 @@ function compareProfile(baselineOutput, productOutput, profile) {
     allowedChanges.add('ui-brand-official')
     allowedChanges.add('ui-layout')
     allowedChanges.add('ui-settings-general')
-    allowedChanges.add('ui-workspace')
   }
 
   const missing = baseline.order.filter(id => !product.rows.has(id))
@@ -141,7 +140,7 @@ function compareProfile(baselineOutput, productOutput, profile) {
       if (baseline.rows.get(id) !== product.rows.get(id)) fail(`compatibility overrides client row ${id}`)
     }
   } else {
-    for (const id of ['ui-brand-official', 'ui-layout', 'ui-settings-general', 'ui-workspace']) {
+    for (const id of ['ui-brand-official', 'ui-layout', 'ui-settings-general']) {
       assertOnlyDisabled(baseline, product, id)
     }
   }

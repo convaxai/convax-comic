@@ -6,13 +6,13 @@ import {
 
 describe('Convax agent preset policy', () => {
   it('keeps only presets that use the Host sandbox and approval seams', () => {
-    const presets = ['standard', 'minimal', 'code', 'cordis'].map(id => ({
+    const presets = ['standard', 'minimal', 'ptc', 'cordis'].map(id => ({
       id,
       trust: 'system' as const,
       path: `/presets/${id}/agent.cordis.yml`,
     }))
     expect(filterAllowedAgentPresets(presets).map(preset => preset.id))
-      .toEqual(['standard', 'code'])
+      .toEqual(['standard', 'ptc'])
     expect(isAllowedAgentPreset('minimal')).toBe(false)
     expect(isAllowedAgentPreset('cordis')).toBe(false)
   })

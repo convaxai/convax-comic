@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 
 const css = await readFile(new URL('../src/client/canvas.css', import.meta.url), 'utf8')
 const viewSource = await readFile(new URL('../src/client/CanvasView.tsx', import.meta.url), 'utf8')
+const workbenchSource = await readFile(new URL('../src/client/Workbench.tsx', import.meta.url), 'utf8')
 
 function rule(selector: string): string {
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')
@@ -31,12 +32,37 @@ describe('Canvas viewport CSS contract', () => {
     expect(rule('.cvxCanvasToolbar')).toMatch(/-webkit-app-region:\s*no-drag/u)
   })
 
+  it('aligns the top creation bar with BeUI and omits duplicate/delete entries', () => {
+    expect(rule('.cvxCanvasToolbar')).toMatch(/--cvx-canvas-action-highlight:\s*color-mix\(in oklab, var\(--cvx-beui-primary,[^;]+\) 7%, transparent\)/u)
+    expect(rule('.cvxCanvasToolbar')).toMatch(/top:\s*16px[^}]*min-height:\s*44px[^}]*gap:\s*6px[^}]*padding:\s*6px/su)
+    expect(rule('.cvxCanvasToolbar')).toMatch(/box-sizing:\s*border-box[^}]*border:\s*1px solid var\(--cvx-beui-border,[^}]*border-radius:\s*var\(--cvx-beui-radius-pill, 999px\)/su)
+    expect(rule('.cvxCanvasToolbar')).toMatch(/background:\s*color-mix\(in oklab, var\(--cvx-beui-card,[^;]+\) 90%, transparent\)[^}]*backdrop-filter:\s*blur\(24px\)/su)
+    expect(rule('.cvxCanvasToolbar .cvxCanvasButton.cvxBeuiButton[data-variant="ghost"]:hover:not(:disabled)')).toMatch(/border-color:\s*transparent[^}]*color:\s*var\(--cvx-beui-foreground,[^}]*background:\s*var\(--cvx-canvas-action-highlight\)/su)
+    expect(viewSource).not.toContain('aria-label="复制所选节点"')
+    expect(viewSource).not.toContain('aria-label="删除所选内容"')
+    expect(viewSource).not.toContain('function DuplicateIcon')
+    expect(viewSource).not.toContain('function TrashIcon')
+    expect(viewSource).toContain("if (command === 'duplicate') duplicateSelection()")
+    expect(viewSource).toContain("else if (command === 'delete') deleteSelection()")
+    expect(css).not.toContain('.cvxCanvasSelectionActions')
+    expect(css).not.toContain('.cvxCanvasButtonDanger')
+  })
+
   it('keeps the nested Canvases tree inside its sidebar width and host theme', () => {
     expect(rule('.cvxCanvasFileTree')).toMatch(/box-sizing:\s*border-box/u)
     expect(rule('.cvxCanvasOverlay,\n.cvxCanvasLauncher,\n.cvxTreeSection')).toMatch(/--cvx-canvas-accent:\s*var\(--cvx-beui-primary, #18181b\)/u)
-    expect(rule('.cvxTreeSectionToggle')).toMatch(/display:\s*flex/u)
+    expect(workbenchSource).toContain('<AnimatedSidebarMenuItem')
+    expect(workbenchSource).toContain('className="cvxCanvasSectionItem"')
+    expect(workbenchSource).toContain('variant="section"')
+    expect(workbenchSource).toContain('<AnimatedSidebarSubmenu expanded={expanded} className="cvxCanvasSectionMotion">')
+    expect(workbenchSource).not.toContain('{expanded && (')
     expect(rule('.cvxTreeAdd')).toMatch(/place-items:\s*center/u)
     expect(rule('.cvxTreeError')).toMatch(/color:\s*var\(--cvx-canvas-danger\)/u)
+    expect(workbenchSource).toContain('workspace.getMediaPreviewUrl(node.id)')
+    expect(workbenchSource).toContain('className="cvxCanvasTreeImagePreview"')
+    expect(workbenchSource).toContain('className="cvxCanvasTreeTextPreview"')
+    expect(rule('.cvxCanvasTreeImagePreview')).toMatch(/object-fit:\s*cover/u)
+    expect(css).toMatch(/\.cvxCanvasTreeTextPreview\s*\{[^}]*font-size:\s*6px/su)
     expect(css).not.toMatch(/#5c7a00|#c6f22d/u)
     expect(viewSource).not.toContain('BEUI_THEME_CSS')
     expect(viewSource).not.toContain('BEUI_COMPONENT_CSS')
@@ -51,6 +77,17 @@ describe('Canvas viewport CSS contract', () => {
     expect(css).not.toContain('.cvxAgentNewSession')
     expect(css).not.toContain('.cvxTreeItem')
     expect(css).not.toContain('.cvxProjectRail')
+  })
+
+  it('aligns the bottom-left viewport bar and its states with BeUI', () => {
+    expect(rule('.cvxViewportToolbar')).toMatch(/--cvx-canvas-action-highlight:\s*color-mix\(in oklab, var\(--cvx-beui-primary,[^;]+\) 7%, transparent\)/u)
+    expect(rule('.cvxViewportToolbar')).toMatch(/left:\s*16px[^}]*bottom:\s*16px[^}]*min-height:\s*44px[^}]*gap:\s*6px[^}]*padding:\s*6px/su)
+    expect(rule('.cvxViewportToolbar')).toMatch(/box-sizing:\s*border-box[^}]*border:\s*1px solid var\(--cvx-beui-border,[^}]*border-radius:\s*var\(--cvx-beui-radius-pill, 999px\)/su)
+    expect(rule('.cvxViewportToolbar')).toMatch(/background:\s*color-mix\(in oklab, var\(--cvx-beui-card,[^;]+\) 90%, transparent\)[^}]*backdrop-filter:\s*blur\(24px\)/su)
+    expect(rule('.cvxViewportToolbar .cvxCanvasIconButton.cvxBeuiButton[data-variant="ghost"]:hover:not(:disabled),\n.cvxViewportToolbar .cvxZoomTrigger:hover,\n.cvxViewportToolbar .cvxZoomTrigger[aria-expanded="true"],\n.cvxViewportToolbar .cvxCanvasIconButton[data-active="true"],\n.cvxViewportToolbar .cvxCanvasIconButton[data-active="true"]:hover:not(:disabled)')).toMatch(/border-color:\s*transparent[^}]*color:\s*var\(--cvx-beui-foreground,[^}]*background:\s*var\(--cvx-canvas-action-highlight\)/su)
+    expect(rule('.cvxLayoutControl:hover,\n.cvxLayoutControl:has(.cvxLayoutDirectionTrigger[aria-expanded="true"])')).toMatch(/background:\s*var\(--cvx-canvas-action-highlight\)/u)
+    const viewportToolbarSource = viewSource.slice(viewSource.indexOf('function ViewportToolbar'))
+    expect(viewportToolbarSource.match(/whileHover=\{\{ scale: 1 \}\}/gu)).toHaveLength(7)
   })
 
   it('only shows the grab cursor while Space panning is active', () => {
@@ -73,9 +110,21 @@ describe('Canvas viewport CSS contract', () => {
     expect(rule('.cvxCanvasHandle')).toMatch(/opacity:\s*0/u)
   })
 
-  it('connects the quick composer focus state to a visible beam animation', () => {
-    expect(rule('.cvxCanvasComposerBeam:focus-within::before')).toMatch(/cvx-canvas-beam-spin 1\.6s/u)
-    expect(rule('.cvxCanvasComposerSurface input')).toMatch(/caret-color:\s*var\(--cvx-canvas-accent\)/u)
-    expect(rule('.cvxCanvasComposer[data-pulse] .cvxCanvasComposerSubmit')).toMatch(/cvx-canvas-submit-pulse/u)
+  it('drops directly at the React Flow pointer projection without a hint overlay', () => {
+    expect(viewSource).toContain('instance.screenToFlowPosition({ x: event.clientX, y: event.clientY })')
+    expect(viewSource).toContain("event.dataTransfer.dropEffect = 'copy'")
+    expect(viewSource).not.toContain('dragActive')
+    expect(viewSource).not.toContain('dragDepth')
+    expect(viewSource).not.toContain('onDragEnter')
+    expect(viewSource).not.toContain('onDragLeave')
+    expect(viewSource).not.toContain('cvxCanvasDropCue')
+    expect(css).not.toContain('.cvxCanvasDropCue')
+  })
+
+  it('does not render or style the removed quick-generation input', () => {
+    expect(viewSource).not.toContain('cvxCanvasComposer')
+    expect(viewSource).not.toContain('快速创建灵感卡片')
+    expect(css).not.toContain('.cvxCanvasComposer')
+    expect(css).not.toContain('cvx-canvas-composer')
   })
 })

@@ -8,15 +8,15 @@ export const CONVAX_SETTINGS_CSS = String.raw`
   width: 100%;
   justify-content: flex-start;
   height: 40px;
-  padding-inline: 10px;
-  border-radius: var(--cvx-beui-radius-md);
+  padding-inline: 12px;
+  border-radius: 14px;
 }
 
 .cvxSettingsTrigger.cvxBeuiButton[data-size="icon"][data-wide="false"] {
   width: 36px;
   height: 36px;
   margin-inline: auto;
-  border-radius: var(--cvx-beui-radius-md);
+  border-radius: 12px;
 }
 
 .cvxSettingsTrigger .cvxBeuiButtonContent {

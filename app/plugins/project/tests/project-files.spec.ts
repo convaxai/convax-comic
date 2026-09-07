@@ -1,4 +1,6 @@
+import { createServer } from 'node:http'
 import { posix } from 'node:path'
+import { Readable } from 'node:stream'
 import { describe, expect, it, vi } from 'vitest'
 import {
   ProjectFilesManager,
@@ -44,6 +46,8 @@ function harness() {
     [`${root}/README.md`, new TextEncoder().encode('# Project\n')],
     [`${root}/cover.png`, Uint8Array.of(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a)],
     [`${root}/bad.png`, new TextEncoder().encode('not a png')],
+    [`${root}/clip.mp4`, Uint8Array.of(0x00, 0x00, 0x00, 0x10, 0x66, 0x74, 0x79, 0x70, 0x69, 0x73, 0x6f, 0x6d)],
+    [`${root}/bad.mp4`, new TextEncoder().encode('not a video')],
     [`${root}/archive.zip`, Uint8Array.of(0x50, 0x4b, 0x03, 0x04)],
   ])
   const fs: ProjectFileSystem = {
@@ -104,6 +108,20 @@ function harness() {
       return next
     },
     coalesceMs: 0,
+    videoFileOpener: async (path) => {
+      const bytes = files.get(path)
+      if (bytes === undefined) throw Object.assign(new Error('missing'), { code: 'ENOENT' })
+      return {
+        async stat() { return { size: bytes.byteLength, isFile: () => true } },
+        async read(buffer, offset, length, position) {
+          const source = bytes.subarray(position, Math.min(bytes.byteLength, position + length))
+          buffer.set(source, offset)
+          return { bytesRead: source.byteLength }
+        },
+        createReadStream({ start, end }) { return Readable.from([bytes.subarray(start, end + 1)]) },
+        async close() {},
+      }
+    },
   })
   return { manager, watcher, watchers, watchRoots, fs, root }
 }
@@ -192,6 +210,25 @@ describe('ProjectFilesManager', () => {
       new AbortController().signal,
     )).rejects.toMatchObject({ code: 'INVALID_IMAGE' })
     await expect(manager.read(
+      { workspaceId: 'workspace-1', path: 'clip.mp4' },
+      new AbortController().signal,
+    )).rejects.toMatchObject({ code: 'UNSUPPORTED_FILE_TYPE' })
+    const videoPreview = await manager.preview(
+      { workspaceId: 'workspace-1', path: 'clip.mp4' },
+      new AbortController().signal,
+    )
+    expect(videoPreview).toMatchObject({
+      kind: 'video', path: 'clip.mp4', name: 'clip.mp4', size: 12,
+      mimeType: 'video/mp4', mediaUrl: expect.stringMatching(/^\/convax\/project-media\//u),
+    })
+    if (videoPreview.kind === 'video') {
+      await expect(manager.releasePreview(videoPreview.previewId)).resolves.toEqual({ released: true })
+    }
+    await expect(manager.preview(
+      { workspaceId: 'workspace-1', path: 'bad.mp4' },
+      new AbortController().signal,
+    )).rejects.toMatchObject({ code: 'INVALID_VIDEO' })
+    await expect(manager.read(
       { workspaceId: 'workspace-1', path: 'archive.zip' },
       new AbortController().signal,
     )).rejects.toMatchObject({ code: 'UNSUPPORTED_FILE_TYPE' })
@@ -204,6 +241,35 @@ describe('ProjectFilesManager', () => {
       new AbortController().signal,
     )).rejects.toMatchObject({ code: 'INVALID_PATH' })
     await manager.dispose()
+  })
+
+  it('serves authenticated-route-ready video leases with strict byte ranges', async () => {
+    const { manager } = harness()
+    const preview = await manager.preview(
+      { workspaceId: 'workspace-1', path: 'clip.mp4' },
+      new AbortController().signal,
+    )
+    expect(preview.kind).toBe('video')
+    if (preview.kind !== 'video') throw new Error('expected a video preview lease')
+    const server = createServer((request, response) => { void manager.serveVideoPreview(request, response) })
+    await new Promise<void>((resolve, reject) => {
+      server.once('error', reject)
+      server.listen(0, '127.0.0.1', () => { resolve() })
+    })
+    try {
+      const address = server.address() as { readonly port: number }
+      const response = await fetch(`http://127.0.0.1:${String(address.port)}${preview.mediaUrl}`, {
+        headers: { range: 'bytes=4-7' },
+      })
+      expect(response.status).toBe(206)
+      expect(response.headers.get('accept-ranges')).toBe('bytes')
+      expect(response.headers.get('content-range')).toBe('bytes 4-7/12')
+      expect(new TextDecoder().decode(await response.arrayBuffer())).toBe('ftyp')
+    } finally {
+      await new Promise<void>(resolve => { server.close(() => { resolve() }) })
+      await manager.releasePreview(preview.previewId)
+      await manager.dispose()
+    }
   })
 
   it('converts observed writes into sequenced invalidations and aborts pending waits on close', async () => {

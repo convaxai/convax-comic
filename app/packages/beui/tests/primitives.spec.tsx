@@ -1,7 +1,11 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import {
+  AnimatedSidebar,
+  AnimatedSidebarMenuItem,
+  AnimatedSidebarSubmenu,
   Button,
+  ChatApp,
   FileTree,
   FileTreeFile,
   FileTreeFolder,
@@ -25,6 +29,89 @@ function treeMarkup(): string {
 }
 
 describe('BeUI source-owned primitives', () => {
+  it('renders an externally controlled Animated Sidebar surface', () => {
+    const expanded = renderToStaticMarkup(
+      <AnimatedSidebar aria-label="Projects" collapsed={false} width={300}>Navigation</AnimatedSidebar>,
+    )
+    const collapsed = renderToStaticMarkup(
+      <AnimatedSidebar aria-label="Projects" collapsed width={56}>Navigation</AnimatedSidebar>,
+    )
+    expect(expanded).toContain('data-slot="animated-sidebar"')
+    expect(expanded).toContain('data-state="expanded"')
+    expect(expanded).toContain('data-width="300"')
+    expect(expanded).toContain('--cvx-beui-animated-sidebar-width:300px')
+    expect(collapsed).toContain('data-state="collapsed"')
+    expect(collapsed).toContain('data-width="56"')
+    expect(collapsed).toContain('cvxBeuiAnimatedSidebarGlow')
+  })
+
+  it('renders an expanded first-level Animated Sidebar menu item', () => {
+    const markup = renderToStaticMarkup(
+      <AnimatedSidebarMenuItem
+        label="Files"
+        icon={<span>F</span>}
+        meta={3}
+        expanded
+        onToggle={() => undefined}
+      />,
+    )
+    expect(markup).toContain('cvxBeuiAnimatedSidebarMenuItem')
+    expect(markup).toContain('data-expanded="true"')
+    expect(markup).toContain('aria-expanded="true"')
+    expect(markup).toContain('cvxBeuiAnimatedSidebarMenuIcon')
+    expect(markup).toContain('cvxBeuiAnimatedSidebarMenuChevron')
+    expect(markup).toContain('Files')
+  })
+
+  it('renders the compact Animated Sidebar section variant without a leading icon', () => {
+    const markup = renderToStaticMarkup(
+      <AnimatedSidebarMenuItem
+        variant="section"
+        label="Files"
+        meta={3}
+        expanded
+        onToggle={() => undefined}
+      />,
+    )
+    expect(markup).toContain('data-variant="section"')
+    expect(markup).not.toContain('cvxBeuiAnimatedSidebarMenuIcon')
+    expect(markup).toContain('Files')
+  })
+
+  it('uses beUI pop-layout submenu mounting instead of retaining a zero-height flex child', () => {
+    const collapsed = renderToStaticMarkup(
+      <AnimatedSidebarSubmenu expanded={false}><button type="button">Nested</button></AnimatedSidebarSubmenu>,
+    )
+    const expanded = renderToStaticMarkup(
+      <AnimatedSidebarSubmenu expanded><button type="button">Nested</button></AnimatedSidebarSubmenu>,
+    )
+    expect(collapsed).toBe('')
+    expect(expanded).toContain('cvxBeuiAnimatedSidebarSubmenu')
+    expect(expanded).toContain('data-expanded="true"')
+    expect(expanded).toContain('Nested')
+  })
+
+  it('keeps Chat App conversation content mounted behind narrow-shell navigation', () => {
+    const closed = renderToStaticMarkup(
+      <ChatApp navigation={<button type="button">History row</button>} navigationOpen={false}>
+        <div data-conversation="official">Conversation</div>
+      </ChatApp>,
+    )
+    const open = renderToStaticMarkup(
+      <ChatApp navigation={<button type="button">History row</button>} navigationOpen navigationLabel="Conversation history">
+        <div data-conversation="official">Conversation</div>
+      </ChatApp>,
+    )
+    expect(closed).toContain('data-slot="chat-app"')
+    expect(closed).toContain('data-navigation-state="closed"')
+    expect(closed).not.toContain('data-slot="chat-app-navigation"')
+    expect(open).toContain('data-navigation-state="open"')
+    expect(open).toContain('data-slot="chat-app-navigation"')
+    expect(open).toContain('aria-label="Conversation history"')
+    expect(open).toContain('aria-hidden="true"')
+    expect(open).toContain('data-conversation="official"')
+  })
+
   it('renders spring buttons through semantic variants', () => {
     const markup = renderToStaticMarkup(<Button variant="secondary" size="sm">Create</Button>)
     expect(markup).toContain('cvxBeuiButton')
@@ -40,6 +127,8 @@ describe('BeUI source-owned primitives', () => {
     expect(markup).toContain('aria-expanded="true"')
     expect(markup).toContain('aria-selected="true"')
     expect(markup).toContain('index.ts')
+    expect(markup).toContain('lucide-folder-open')
+    expect(markup).toContain('lucide-file')
     expect(markup).toContain('draggable="true"')
   })
 

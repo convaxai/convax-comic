@@ -40,62 +40,6 @@
   margin-bottom: 16px;
 }
 
-.cvxTreeSection > header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  height: 30px;
-  padding: 0 8px;
-  color: var(--cvx-canvas-muted);
-  font-size: 11px;
-  font-weight: 650;
-  letter-spacing: .08em;
-  text-transform: uppercase;
-}
-
-.cvxTreeSection > header small {
-  font-size: 9px;
-  font-weight: 600;
-}
-
-.cvxTreeSectionToggle {
-  appearance: none;
-  display: flex;
-  min-width: 0;
-  height: 100%;
-  flex: 1;
-  align-items: center;
-  gap: 5px;
-  padding: 0;
-  border: 0;
-  outline: none;
-  color: inherit;
-  background: transparent;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-
-.cvxTreeSectionToggle:focus-visible {
-  border-radius: 5px;
-  box-shadow: 0 0 0 2px color-mix(in oklab, var(--cvx-canvas-accent) 35%, transparent);
-}
-
-.cvxTreeSectionToggle small {
-  color: var(--cvx-canvas-muted);
-  font-variant-numeric: tabular-nums;
-}
-
-.cvxTreeSectionChevron {
-  flex: 0 0 auto;
-  color: var(--cvx-canvas-muted);
-  transition: transform 150ms ease;
-}
-
-.cvxTreeSection[data-expanded] .cvxTreeSectionChevron {
-  transform: rotate(90deg);
-}
-
 .cvxTreeSectionBody {
   min-height: 0;
 }
@@ -140,6 +84,34 @@
 .cvxCanvasFileTree .cvxBeuiFileTreeIcon,
 .cvxCanvasFileTree .cvxBeuiFileTreeIcon svg {
   color: var(--cvx-canvas-accent);
+}
+
+.cvxCanvasTreeImagePreview,
+.cvxCanvasTreeTextPreview {
+  display: grid;
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  overflow: hidden;
+  border: 1px solid color-mix(in oklab, var(--cvx-canvas-line) 78%, transparent);
+  border-radius: 5px;
+  background: var(--cvx-canvas-raised);
+}
+
+.cvxCanvasTreeImagePreview {
+  object-fit: cover;
+}
+
+.cvxCanvasTreeTextPreview {
+  place-items: center;
+  box-sizing: border-box;
+  padding: 2px;
+  color: var(--cvx-canvas-secondary);
+  font-size: 6px;
+  font-weight: 650;
+  line-height: 1;
+  text-align: center;
+  word-break: break-all;
 }
 
 .cvxCanvasFileTree .cvxCanvasTreeActive {
@@ -221,8 +193,7 @@
   isolation: isolate;
 }
 
-.cvxCanvasTools,
-.cvxCanvasSelectionActions {
+.cvxCanvasTools {
   display: flex;
   align-items: center;
 }
@@ -326,25 +297,48 @@
 }
 
 .cvxCanvasToolbar {
+  --cvx-canvas-action-highlight: color-mix(in oklab, var(--cvx-beui-primary, var(--cvx-canvas-accent)) 7%, transparent);
   position: absolute;
   z-index: 5;
-  top: 14px;
+  top: 16px;
   left: 50%;
   display: flex;
+  min-height: 44px;
   align-items: center;
-  gap: 5px;
-  padding: 5px;
-  border: 1px solid var(--cvx-canvas-line);
-  border-radius: var(--cvx-canvas-radius-lg);
-  background: color-mix(in srgb, var(--cvx-canvas-raised) 92%, transparent);
-  box-shadow: var(--cvx-canvas-shadow-medium);
-  backdrop-filter: blur(16px);
+  gap: 6px;
+  padding: 6px;
+  box-sizing: border-box;
+  border: 1px solid var(--cvx-beui-border, var(--cvx-canvas-line));
+  border-radius: var(--cvx-beui-radius-pill, 999px);
+  color: var(--cvx-beui-muted-foreground, var(--cvx-canvas-secondary));
+  background: color-mix(in oklab, var(--cvx-beui-card, var(--cvx-canvas-raised)) 90%, transparent);
+  box-shadow: 0 25px 50px -12px rgb(0 0 0 / 25%);
+  backdrop-filter: blur(24px);
   transform: translateX(-50%);
   -webkit-app-region: no-drag;
 }
 
 .cvxCanvasTools {
-  gap: 4px;
+  gap: 6px;
+}
+
+.cvxCanvasToolbar .cvxCanvasButton,
+.cvxCanvasToolbar .cvxCanvasButton.cvxBeuiButton[data-size="sm"] {
+  border-color: transparent;
+  border-radius: var(--cvx-beui-radius-pill, 999px);
+  color: var(--cvx-beui-muted-foreground, var(--cvx-canvas-secondary));
+  background: transparent;
+}
+
+.cvxCanvasToolbar .cvxCanvasButton.cvxBeuiButton[data-variant="ghost"]:hover:not(:disabled) {
+  border-color: transparent;
+  color: var(--cvx-beui-foreground, var(--cvx-canvas-ink));
+  background: var(--cvx-canvas-action-highlight);
+}
+
+.cvxCanvasToolbar .cvxCanvasButton:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px var(--cvx-beui-ring, color-mix(in oklab, var(--cvx-canvas-accent) 12%, transparent));
 }
 
 .cvxCanvasDivider {
@@ -416,37 +410,65 @@
   cursor: not-allowed;
 }
 
-.cvxCanvasButtonDanger:hover:not(:disabled) {
-  border-color: color-mix(in oklab, var(--cvx-canvas-danger) 46%, var(--cvx-canvas-line));
-  color: var(--cvx-canvas-danger);
-  background: var(--cvx-canvas-danger-soft);
-}
-
 .cvxViewportToolbar {
+  --cvx-canvas-action-highlight: color-mix(in oklab, var(--cvx-beui-primary, var(--cvx-canvas-accent)) 7%, transparent);
   position: absolute;
   z-index: 6;
-  left: 14px;
-  bottom: 14px;
+  left: 16px;
+  bottom: 16px;
   display: flex;
+  min-height: 44px;
   align-items: center;
-  gap: 3px;
-  min-height: 42px;
-  padding: 4px 5px;
-  border: 1px solid var(--cvx-canvas-line);
-  border-radius: var(--cvx-canvas-radius-lg);
-  background: color-mix(in srgb, var(--cvx-canvas-raised) 94%, transparent);
-  box-shadow: var(--cvx-canvas-shadow-low);
-  backdrop-filter: blur(14px);
+  gap: 6px;
+  padding: 6px;
+  box-sizing: border-box;
+  border: 1px solid var(--cvx-beui-border, var(--cvx-canvas-line));
+  border-radius: var(--cvx-beui-radius-pill, 999px);
+  color: var(--cvx-beui-muted-foreground, var(--cvx-canvas-secondary));
+  background: color-mix(in oklab, var(--cvx-beui-card, var(--cvx-canvas-raised)) 90%, transparent);
+  box-shadow: 0 25px 50px -12px rgb(0 0 0 / 25%);
+  backdrop-filter: blur(24px);
 }
 
 .cvxViewportToolbar .cvxCanvasDivider {
   height: 21px;
-  margin: 0 3px;
+  margin: 0 1px;
+  background: var(--cvx-beui-border, var(--cvx-canvas-line));
+}
+
+.cvxViewportToolbar .cvxCanvasIconButton,
+.cvxViewportToolbar .cvxZoomTrigger,
+.cvxViewportToolbar .cvxLayoutDirectionTrigger {
+  border-color: transparent;
+  color: var(--cvx-beui-muted-foreground, var(--cvx-canvas-secondary));
+  background: transparent;
+}
+
+.cvxViewportToolbar .cvxCanvasIconButton,
+.cvxViewportToolbar .cvxCanvasIconButton.cvxBeuiButton[data-size="icon"],
+.cvxViewportToolbar .cvxZoomTrigger {
+  border-radius: var(--cvx-beui-radius-pill, 999px);
+}
+
+.cvxViewportToolbar .cvxCanvasIconButton.cvxBeuiButton[data-variant="ghost"]:hover:not(:disabled),
+.cvxViewportToolbar .cvxZoomTrigger:hover,
+.cvxViewportToolbar .cvxZoomTrigger[aria-expanded="true"],
+.cvxViewportToolbar .cvxCanvasIconButton[data-active="true"],
+.cvxViewportToolbar .cvxCanvasIconButton[data-active="true"]:hover:not(:disabled) {
+  border-color: transparent;
+  color: var(--cvx-beui-foreground, var(--cvx-canvas-ink));
+  background: var(--cvx-canvas-action-highlight);
 }
 
 .cvxViewportToolbar .cvxCanvasIconButton[data-active="true"] {
-  border-color: var(--cvx-canvas-accent-border);
-  background: var(--cvx-canvas-accent-soft);
+  box-shadow: none;
+}
+
+.cvxViewportToolbar .cvxCanvasIconButton:focus-visible,
+.cvxViewportToolbar .cvxZoomTrigger:focus-visible,
+.cvxViewportToolbar .cvxLayoutDirectionTrigger:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px var(--cvx-beui-ring, color-mix(in oklab, var(--cvx-canvas-accent) 12%, transparent));
 }
 
 .cvxZoomControl {
@@ -457,11 +479,16 @@
   position: relative;
   display: flex;
   align-items: center;
+  border-radius: var(--cvx-beui-radius-pill, 999px);
+  transition: color 150ms ease-out, background-color 150ms ease-out;
 }
 
-.cvxLayoutControl > .cvxCanvasIconButton {
-  border-top-right-radius: 4px;
-  border-bottom-right-radius: 4px;
+.cvxViewportToolbar .cvxLayoutControl > .cvxCanvasIconButton,
+.cvxViewportToolbar .cvxLayoutControl > .cvxCanvasIconButton:hover:not(:disabled) {
+  border-color: transparent;
+  border-radius: var(--cvx-beui-radius-pill, 999px) 0 0 var(--cvx-beui-radius-pill, 999px);
+  color: inherit;
+  background: transparent;
 }
 
 .cvxLayoutDirectionTrigger {
@@ -474,18 +501,25 @@
   margin-left: -1px;
   padding: 0;
   border: 1px solid transparent;
-  border-top-right-radius: var(--cvx-canvas-radius-md);
-  border-bottom-right-radius: var(--cvx-canvas-radius-md);
-  color: var(--cvx-canvas-muted);
+  border-radius: 0 var(--cvx-beui-radius-pill, 999px) var(--cvx-beui-radius-pill, 999px) 0;
+  color: inherit;
   background: transparent;
   cursor: pointer;
 }
 
-.cvxLayoutControl:hover > .cvxCanvasIconButton,
+.cvxLayoutControl:hover,
+.cvxLayoutControl:has(.cvxLayoutDirectionTrigger[aria-expanded="true"]) {
+  color: var(--cvx-beui-foreground, var(--cvx-canvas-ink));
+  background: var(--cvx-canvas-action-highlight);
+}
+
+.cvxLayoutControl:hover > .cvxLayoutDirectionTrigger,
+.cvxLayoutControl:has(.cvxLayoutDirectionTrigger[aria-expanded="true"]) > .cvxLayoutDirectionTrigger,
 .cvxLayoutDirectionTrigger:hover,
 .cvxLayoutDirectionTrigger[aria-expanded="true"] {
-  border-color: var(--cvx-canvas-line);
-  background: var(--cvx-canvas-hover);
+  border-color: transparent;
+  color: inherit;
+  background: transparent;
 }
 
 .cvxZoomTrigger {
@@ -505,11 +539,6 @@
   font-size: 11px;
   font-variant-numeric: tabular-nums;
   cursor: pointer;
-}
-
-.cvxZoomTrigger:hover {
-  border-color: var(--cvx-canvas-line);
-  background: var(--cvx-canvas-hover);
 }
 
 .cvxZoomTrigger span {
@@ -598,207 +627,6 @@
   color: inherit;
   background: transparent;
   cursor: pointer;
-}
-
-.cvxCanvasDropCue {
-  position: absolute;
-  z-index: 6;
-  inset: 12px;
-  display: grid;
-  place-items: center;
-  border: 1px dashed var(--cvx-canvas-accent);
-  border-radius: var(--cvx-canvas-radius-lg);
-  color: var(--cvx-canvas-ink);
-  background: color-mix(in oklab, var(--cvx-canvas-accent) 12%, transparent);
-  pointer-events: none;
-  backdrop-filter: blur(4px);
-}
-
-.cvxCanvasDropCue div {
-  display: grid;
-  justify-items: center;
-  gap: 9px;
-  padding: 18px 26px;
-  border: 1px solid var(--cvx-canvas-line);
-  border-radius: var(--cvx-canvas-radius-lg);
-  background: color-mix(in srgb, var(--cvx-canvas-raised) 92%, transparent);
-  box-shadow: var(--cvx-canvas-shadow-medium);
-  font-size: 12px;
-  font-weight: 650;
-}
-
-.cvxCanvasComposer {
-  position: absolute;
-  z-index: 50;
-  right: 16px;
-  bottom: 16px;
-  left: 16px;
-  display: grid;
-  width: min(600px, calc(100% - 32px));
-  justify-self: center;
-  gap: 7px;
-  margin-inline: auto;
-  pointer-events: none;
-  animation: cvx-canvas-composer-enter 200ms cubic-bezier(.16, 1, .3, 1) both;
-}
-
-.cvxCanvasComposerBeam {
-  position: relative;
-  isolation: isolate;
-  width: 100%;
-  padding: 1px;
-  overflow: hidden;
-  border-radius: 15px;
-  background: var(--cvx-canvas-line-strong);
-  box-shadow: 0 14px 34px -16px rgb(0 0 0 / 42%);
-  pointer-events: auto;
-}
-
-.cvxCanvasComposerBeam::before,
-.cvxCanvasComposerBeam::after {
-  position: absolute;
-  z-index: -1;
-  inset: -180%;
-  background: conic-gradient(
-    from 0deg,
-    #7dd3fc 0deg,
-    #a78bfa 72deg,
-    #f472b6 144deg,
-    #facc15 216deg,
-    #86efac 288deg,
-    #7dd3fc 360deg
-  );
-  content: "";
-  opacity: 0;
-  transform-origin: center;
-  transition: opacity 140ms cubic-bezier(.2, 0, 0, 1);
-}
-
-.cvxCanvasComposerBeam::after {
-  filter: blur(16px);
-  opacity: 0;
-}
-
-.cvxCanvasComposerBeam:focus-within::before {
-  opacity: .82;
-  animation: cvx-canvas-beam-spin 1.6s linear 1;
-}
-
-.cvxCanvasComposerBeam:focus-within::after {
-  opacity: .28;
-  animation: cvx-canvas-beam-spin 1.6s linear 1;
-}
-
-.cvxCanvasComposer[data-pulse] .cvxCanvasComposerBeam::before {
-  opacity: 1;
-  animation: cvx-canvas-beam-spin .62s linear 1;
-}
-
-.cvxCanvasComposer[data-pulse] .cvxCanvasComposerBeam::after {
-  opacity: .44;
-  animation: cvx-canvas-beam-spin .62s linear 1;
-}
-
-.cvxCanvasComposerSurface {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  min-width: 0;
-  height: 52px;
-  align-items: center;
-  gap: 9px;
-  padding: 5px 6px 5px 15px;
-  border-radius: 14px;
-  color: var(--cvx-canvas-ink);
-  background: color-mix(in srgb, var(--cvx-canvas-raised) 94%, transparent);
-  backdrop-filter: blur(18px) saturate(118%);
-}
-
-.cvxCanvasComposerSpark {
-  display: inline-flex;
-  flex: 0 0 auto;
-  color: var(--cvx-canvas-accent);
-  transition: transform var(--cvx-canvas-motion-normal) cubic-bezier(.34, 1.56, .64, 1);
-}
-
-.cvxCanvasComposerBeam:focus-within .cvxCanvasComposerSpark {
-  transform: rotate(-8deg) scale(1.08);
-}
-
-.cvxCanvasComposerSurface input {
-  min-width: 0;
-  flex: 1;
-  border: 0;
-  outline: 0;
-  color: inherit;
-  background: transparent;
-  caret-color: var(--cvx-canvas-accent);
-  font: inherit;
-  font-size: 13px;
-}
-
-.cvxCanvasComposerSurface input::placeholder {
-  color: var(--cvx-canvas-muted);
-  opacity: .84;
-  transition: opacity var(--cvx-canvas-motion-normal) var(--cvx-canvas-ease);
-}
-
-.cvxCanvasComposerSurface input:focus::placeholder {
-  opacity: .5;
-}
-
-.cvxCanvasComposerSubmit {
-  display: grid;
-  width: 40px;
-  height: 40px;
-  flex: 0 0 40px;
-  place-items: center;
-  padding: 0;
-  border: 0;
-  border-radius: 10px;
-  color: var(--cvx-canvas-on-accent);
-  background: var(--cvx-canvas-accent);
-  box-shadow: 0 8px 18px -10px color-mix(in srgb, var(--cvx-canvas-accent) 70%, transparent);
-  cursor: pointer;
-  transition:
-    opacity var(--cvx-canvas-motion-fast) var(--cvx-canvas-ease),
-    transform var(--cvx-canvas-motion-fast) var(--cvx-canvas-ease),
-    box-shadow var(--cvx-canvas-motion-fast) var(--cvx-canvas-ease);
-}
-
-.cvxCanvasComposerSubmit:hover:not(:disabled) {
-  transform: translateY(-1px) scale(1.03);
-  box-shadow: 0 10px 22px -9px color-mix(in srgb, var(--cvx-canvas-accent) 78%, transparent);
-}
-
-.cvxCanvasComposerSubmit:active:not(:disabled) {
-  transform: scale(.96);
-}
-
-.cvxCanvasComposerSubmit:disabled {
-  opacity: .36;
-  cursor: default;
-}
-
-.cvxCanvasComposer[data-pulse] .cvxCanvasComposerSubmit {
-  animation: cvx-canvas-submit-pulse .62s cubic-bezier(.16, 1, .3, 1) both;
-}
-
-.cvxCanvasComposerHint {
-  justify-self: center;
-  color: var(--cvx-canvas-muted);
-  font-size: 10px;
-  line-height: 1;
-  opacity: 0;
-  transform: translateY(-2px);
-  transition:
-    opacity var(--cvx-canvas-motion-normal) var(--cvx-canvas-ease),
-    transform var(--cvx-canvas-motion-normal) var(--cvx-canvas-ease);
-}
-
-.cvxCanvasComposer:focus-within .cvxCanvasComposerHint {
-  opacity: .72;
-  transform: translateY(0);
 }
 
 .cvxCanvasNode {
@@ -1091,30 +919,6 @@
   }
 }
 
-@keyframes cvx-canvas-composer-enter {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes cvx-canvas-beam-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-@keyframes cvx-canvas-submit-pulse {
-  0% { transform: scale(.9); }
-  48% { transform: scale(1.08); }
-  100% { transform: scale(1); }
-}
-
 @media (max-width: 840px) {
   .cvxCanvasToolbar {
     left: 12px;
@@ -1138,21 +942,11 @@
   .cvxCanvasIconButton,
   .cvxCanvasNodeSurface,
   .cvxCanvasHandle,
-  .cvxCanvasComposer,
-  .cvxCanvasComposerSpark,
-  .cvxCanvasComposerHint,
-  .cvxCanvasComposerSubmit,
-  .cvxCanvasComposerBeam::before,
-  .cvxCanvasComposerBeam::after,
   .cvxCanvasNodeTextInput::placeholder {
     transition: none;
   }
 
-  .cvxCanvasNodeEntryShell,
-  .cvxCanvasComposer,
-  .cvxCanvasComposerBeam::before,
-  .cvxCanvasComposerBeam::after,
-  .cvxCanvasComposerSubmit {
+  .cvxCanvasNodeEntryShell {
     animation: none !important;
   }
 }

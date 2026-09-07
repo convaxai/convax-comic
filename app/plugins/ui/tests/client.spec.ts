@@ -32,11 +32,29 @@ describe('Convax Comic BeUI client foundation', () => {
       subscribe: vi.fn(() => () => undefined),
     }
 
+    const settingsScope = {
+      describe: vi.fn(() => ({
+        getSnapshot: () => ({ view: undefined, error: null }),
+        subscribe: () => () => undefined,
+        ensure: async () => undefined,
+      })),
+    }
+    const effect = (callback: () => (() => void)): void => {
+      const dispose = callback()
+      if (typeof dispose === 'function') effectDisposers.push(dispose)
+    }
+
     apply({
-      effect(callback: () => (() => void)): void {
-        const dispose = callback()
-        if (typeof dispose === 'function') effectDisposers.push(dispose)
+      inject(names: string[], callback: (ctx: unknown) => void): void {
+        expect(names).toEqual(['remote.settings'])
+        callback({
+          remote: { settings: { openSettingsDocument: vi.fn() } },
+          settingsScope,
+          slots,
+          effect,
+        })
       },
+      effect,
       on: vi.fn(() => () => undefined),
       slots,
       theme: {
@@ -48,20 +66,14 @@ describe('Convax Comic BeUI client foundation', () => {
         getSnapshot: vi.fn(() => ({ revision: 0 })),
         subscribe: vi.fn(() => () => undefined),
       },
-      connection: {
-        isLoopback: true,
-        api: { settings: { openDocument: vi.fn() } },
+      remote: {
+        $host: { isLoopback: true },
+        get settings(): never { throw new Error('remote.settings requires scoped injection') },
       },
-      settingsScope: {
-        describe: vi.fn(() => ({
-          getSnapshot: () => ({ view: undefined, error: null }),
-          subscribe: () => () => undefined,
-          ensure: async () => undefined,
-        })),
-      },
+      settingsScope,
     } as never)
 
-    expect(inject).toEqual(['slots', 'theme', 'locale', 'connection', 'settingsScope'])
+    expect(inject).toEqual(['slots', 'theme', 'locale', 'remote', 'settingsScope'])
     expect(registrations.map(options => ({ name: options.name, id: options.id }))).toEqual([
       { name: 'shell.overlay', id: 'app-ui-beui-styles' },
       { name: 'sidebar.brand.mark', id: undefined },
@@ -100,8 +112,8 @@ describe('Convax Comic BeUI client foundation', () => {
     expect(clientSource).not.toContain("color: 'var(--dsw-alias-bg-layer-1)'")
   })
 
-  it('keeps the wide settings trigger from inheriting BeUI icon-button width', () => {
-    expect(CONVAX_SETTINGS_CSS).toMatch(/\.cvxSettingsTrigger\.cvxBeuiButton\[data-size="icon"\]\[data-wide="true"\]\s*\{[^}]*width:\s*100%/su)
+  it('keeps the wide settings trigger on the shared rounded sidebar-item geometry', () => {
+    expect(CONVAX_SETTINGS_CSS).toMatch(/\.cvxSettingsTrigger\.cvxBeuiButton\[data-size="icon"\]\[data-wide="true"\]\s*\{[^}]*width:\s*100%[^}]*height:\s*40px[^}]*border-radius:\s*14px/su)
   })
 
   it('ships complete Chinese and English settings dictionaries', () => {
