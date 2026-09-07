@@ -32,13 +32,13 @@ Electron Renderer（sandbox、无 Node）
 
 | 项目 | 固定值 |
 | --- | --- |
-| DSH npm 运行闭包 / source commit | `0.1.1-rc.2` / `b150a551…` |
+| DSH npm 运行闭包 / source commit | `0.1.2-rc.1` / `a66e4702…` |
 | Electron | `43.4.0` |
 | 打包 Node | 独立 `24.9.0`，不使用 `ELECTRON_RUN_AS_NODE` |
 | 首发平台 | 未签名 macOS ARM64 目录产物 |
 | profile | `compatibility` / `default` |
 | 上游补丁 | 空 |
-| default 附加模型 provider | `dsh-codex-connect@0.1.0-alpha.4.20` |
+| default 附加模型 provider | `dsh-codex-connect@0.1.0-alpha.4.30` |
 
 产品仓库不包含上游源码。`upstream.json` 记录 npm 版本与 source commit
 映射；需要读源码或运行上游构建时，可在仓库同级放置可选的
@@ -90,7 +90,8 @@ upstream.json       npm 运行版本与外部源码 commit 映射
 - Host 固定 `127.0.0.1` 随机端口；权限固定保守的
   `workspace-write + ask`，用户 home patch 不能放宽最终安全 overlay。
 - Renderer 保持 `sandbox`、`contextIsolation`、无 Node，并只允许当前
-  精确 origin。
+  精确 origin。上游浏览器会话交换由 Electron `net.request` 完成，仅同步跟随一次
+  指向当前 origin 干净根路径的 303；不依赖 `session.fetch` 的中间响应或空 URL。
 
 ### 组合与 UI
 
@@ -106,11 +107,22 @@ upstream.json       npm 运行版本与外部源码 commit 映射
   始终跟随持久化设置。
 - `default` 由 Project Client 接管文档化 `root` 与 `sidebar.workspaces` slot，
   但 panel 内容仍不硬编码进壳：顶部项目选择器投影 DSH Workspace，切换时通过
-  官方 `workspaces.connectWorkspace` / `sessions.open` 同步当前会话；左侧为项目
-  文件目录与嵌套 `project.canvases` seat；Canvas 只向 `workbench.center` 和该
-  nested seat 贡献 React Flow 画布与画布列表。右侧由 `workbench.agent` 单一
-  slot 承载可替换 Agent panel，并继续声明官方 `conversation`、`details` 和
-  可追加 header action slots。Project 提供与上游三方法兼容的 `layout` service，
+  官方 `uiWorkspace.connectWorkspace` / `sessions.open` 同步当前会话；default 保留上游
+  `ui-workspace` 导航、目录服务与全局 workspace hook，Project 仅以更高 priority 替换 sidebar seat。左侧为项目
+  文件目录与嵌套 `project.canvases` seat；FILES/CANVASES 分区标题保持一致的水平命中区，
+  Canvas sticky 标题使用不透明 sidebar 背景，滚动条目不得穿透标题；Canvas 只向
+  `workbench.center` 和该 nested seat 贡献 React Flow 画布与画布列表。右侧由 `workbench.agent` 单一
+  slot 承载 source-owned BeUI Chat App 壳，但官方 `conversation`、`details` 和
+  可追加 header action slots 仍是业务权威；Project 只以 DSH Workspace `sessionIds`
+  和 Session list 派生当前项目 history overlay，切换直接调用 `sessions.open`，打开
+  history 时不卸载对话子树，也不改变 Project/Canvas scope；Agent 空态使用产品文案且隐藏上游
+  Workspace 切换入口（项目切换只留在 Project sidebar）；官方 composer 的数据与事件仍归
+  conversation occupant，Project 仅基于其稳定 DOM 契约附加 BeUI Prompt Input surface；可见 backdrop、
+  透明 textarea 与高度 mirror 必须保持同一 typography/wrapping contract，确保文字和 caret 对齐；同时提供
+  reduced-motion-safe add/send swap，并在窄栏折叠模型选择器以维持底栏单行；模型弹层按 composer
+  边界动态校正，加号菜单使用可用宽度并允许说明文案完整换行；model menu 展开时即使上游暂时卸载 quota control，
+  也维持最后一次用量条的连续绘制，并锁定 AI 等 trailing controls 的开合坐标、避免重叠。Project root 同时沿用 pinned AppFrame 在已观察 nonblank
+  session 切换时关闭旧 details 的语义。Project 提供与上游三方法兼容的 `layout` service，
   左右 panel 的偏好宽度由该 service 持有，并通过支持指针捕获、键盘与双击复位的
   separator 调整；窄窗只压缩实际列宽，空间恢复后仍恢复偏好宽度。该 service 按
   DSH 的窄屏 rail 与 concession 顺序管理 panel。该替换只存在于
@@ -120,8 +132,8 @@ upstream.json       npm 运行版本与外部源码 commit 映射
   在完整 cleanup（含长轮询取消和乐观写收敛）后按新 scope 重启，不额外维护
   全局 ActiveSet 或消息 broker。
 - `default` 额外挂载精确 pin 的 Codex Connect provider，默认模型仍为
-  DeepSeek、全局搜索仍走 DeepSeek；独立搜索、图片查看与图片生成能力启用，
-  proxy 保持关闭，OAuth 只能由用户在设置中显式发起。`compatibility` 不挂载
+  DeepSeek、全局搜索仍走 DeepSeek；图片查看与图片生成能力启用，Codex 独立
+  搜索与自动审批保持关闭，proxy 保持关闭，OAuth 只能由用户在设置中显式发起。`compatibility` 不挂载
   该第三方 provider。
 - 漫画产品 UI 必须作为 Client 插件加入；不得把领域 UI 塞进 Electron
   bootstrap，也不得自建 Plugin Host、Catalog 或消息 broker。
@@ -174,8 +186,19 @@ upstream.json       npm 运行版本与外部源码 commit 映射
 - `@convax/canvas-builtins` 是独立 physical plugin：Host 贡献
   `comic.note@1`、`comic.image@1`、`comic.sequence@1`，Client 对称贡献 renderer。
   type registry 以 `(type, kindVersion)` 建键，插件缺失或版本不匹配的既存 data
-  无损只读，仍可移动、resize、连接和原子删除；外部或 Files 目录树拖入的图片
-  `File` 与 object URL 只在临时资源表存在并在失去引用或插件卸载时释放。
+  无损只读，仍可移动、resize、连接和原子删除；外部或 Files 目录树拖入直接使用
+  React Flow 的鼠标落点，不显示整画布提示蒙层。目录树文件名采用中间省略：有后缀
+  时固定保留后缀，无后缀的长名称也固定保留末四个字符；已加载图片与视频帧替换类型
+  icon，文本、图片、视频 hover 显示放大预览。Canvas 树的图片节点直接使用真实媒体
+  缩略图，文本节点使用真实文本开头。图片缩略图限量、限并发并经 Host 校验；视频由
+  独立 `projectFiles/preview` 签发短时、可主动释放的随机媒体 lease，经 auth-fence 后的
+  同源 Range 路由从已校验且 no-follow 打开的文件描述符按需读取，因此大文件不进入
+  JSON/base64，也不进入 image-only Canvas 导入契约。拖影和预览使用的 `File`、媒体
+  lease 与 object URL 在失去引用、超时或插件卸载时释放。
+  Files 图片导入在既有 asset source 内保留 `project-file:<相对路径>` 引用，重启后按
+  Canvas 所属 Workspace 经相同 Host 校验重读；不复制或承诺保留原文件。旧 loopback HTTP
+  图片以精确 pathname 尝试同一 Workspace 内的有界预览恢复，不改写原始 source；不按标题
+  或文件名猜测丢失的 `asset:v2-*`。外部拖入的 File 仍是会话临时媒体，重启后不可依赖。
   后续持久资产必须写入
   产品自有目录，不得写入 DSH storage、attachments 或会话。
 - 漫画项目、角色、场景、分镜、媒体资产和导出物最终必须由领域插件放在

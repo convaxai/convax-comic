@@ -101,6 +101,7 @@ export function childEnvironment(
     ...safeBase,
     [CONTROL_TOKEN_ENV]: token,
     DSH_HOME: paths.harnessHome,
+    DSH_TELEMETRY_MODE: 'DISABLED',
     CONVAX_PROJECTS_HOME: paths.projectsHome,
   }
 }

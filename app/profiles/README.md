@@ -18,8 +18,8 @@
   remains untouched.
 - `default` also mounts the exactly pinned `dsh-codex-connect` provider under
   its canonical `llm-openai-codex` row. It does not replace the DeepSeek default
-  model or global search route. Standalone Codex search, image viewing, and image
-  generation are enabled, while proxy remains disabled. `compatibility` does not
+  model or global search route. Image viewing and generation are enabled;
+  standalone Codex search, automatic approval review, and proxy remain disabled. `compatibility` does not
   mount this provider.
 
 All patch files are pure data. Config fields replace complete upstream config

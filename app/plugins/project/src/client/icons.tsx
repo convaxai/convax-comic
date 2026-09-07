@@ -30,6 +30,26 @@ export function PlusIcon(props: IconProps): ReactElement {
   return <SvgIcon {...props}><path d="M12 5v14M5 12h14" /></SvgIcon>
 }
 
+export function HistoryIcon(props: IconProps): ReactElement {
+  return (
+    <SvgIcon {...props}>
+      <path d="M3 12a9 9 0 1 0 3-6.7L3 8" />
+      <path d="M3 3v5h5M12 7v5l3 2" />
+    </SvgIcon>
+  )
+}
+
+export function ProjectsIcon(props: IconProps): ReactElement {
+  return (
+    <SvgIcon {...props}>
+      <rect x="3" y="3" width="7" height="7" rx="2" />
+      <rect x="14" y="3" width="7" height="7" rx="2" />
+      <rect x="3" y="14" width="7" height="7" rx="2" />
+      <path d="M14 17.5h7M17.5 14v7" />
+    </SvgIcon>
+  )
+}
+
 export function PanelRightIcon({ size = 16, ...props }: IconProps): ReactElement {
   return (
     <svg
@@ -51,7 +71,7 @@ export function PanelRightIcon({ size = 16, ...props }: IconProps): ReactElement
   )
 }
 
-function FolderIcon({ open, ...props }: IconProps & { readonly open: boolean }): ReactElement {
+export function FolderIcon({ open, ...props }: IconProps & { readonly open: boolean }): ReactElement {
   if (open) {
     return (
       <SvgIcon {...props}>
@@ -124,13 +144,46 @@ const imageExtensions = new Set(['avif', 'gif', 'jpeg', 'jpg', 'png', 'svg', 'we
 const videoExtensions = new Set(['m4v', 'mov', 'mp4', 'webm'])
 const audioExtensions = new Set(['aac', 'flac', 'm4a', 'mp3', 'ogg', 'wav'])
 const codeExtensions = new Set(['c', 'cpp', 'css', 'go', 'html', 'js', 'jsx', 'json', 'py', 'rs', 'sh', 'ts', 'tsx', 'vue', 'yaml', 'yml'])
+const textPreviewExtensions = new Set([
+  'c', 'cc', 'cpp', 'css', 'csv', 'go', 'h', 'hpp', 'html', 'java', 'js', 'json', 'jsx',
+  'markdown', 'md', 'mjs', 'py', 'rs', 'sh', 'sql', 'toml', 'ts', 'tsx', 'txt', 'xml', 'yaml', 'yml',
+])
 
-export function ProjectEntryIcon({ entry, expanded }: { readonly entry: ProjectFileEntry; readonly expanded: boolean }): ReactElement {
+export type ProjectEntryMediaKind = 'image' | 'video'
+export type ProjectEntryPreviewKind = ProjectEntryMediaKind | 'text'
+
+export function projectEntryMediaKind(name: string): ProjectEntryMediaKind | undefined {
+  const extension = name.split('.').pop()?.toLowerCase() ?? ''
+  if (imageExtensions.has(extension)) return 'image'
+  if (videoExtensions.has(extension)) return 'video'
+  return undefined
+}
+
+export function projectEntryPreviewKind(name: string): ProjectEntryPreviewKind | undefined {
+  const mediaKind = projectEntryMediaKind(name)
+  if (mediaKind !== undefined) return mediaKind
+  const extension = name.split('.').pop()?.toLowerCase() ?? ''
+  return textPreviewExtensions.has(extension) ? 'text' : undefined
+}
+
+export function ProjectEntryIcon({
+  entry,
+  expanded,
+  previewUrl,
+}: {
+  readonly entry: ProjectFileEntry
+  readonly expanded: boolean
+  readonly previewUrl?: string | undefined
+}): ReactElement {
   if (entry.kind === 'directory') return <FolderIcon className="cvxProjectIconFolder" open={expanded} />
   if (entry.kind === 'symlink') return <ExternalLinkIcon className="cvxProjectIconMuted" />
+  const mediaKind = projectEntryMediaKind(entry.name)
+  if (mediaKind !== undefined && previewUrl !== undefined) {
+    return <img className="cvxProjectFileThumbnail" src={previewUrl} alt="" draggable={false} />
+  }
+  if (mediaKind === 'image') return <FileImageIcon className="cvxProjectIconImage" />
+  if (mediaKind === 'video') return <FileVideoIcon className="cvxProjectIconVideo" />
   const extension = entry.name.split('.').pop()?.toLowerCase() ?? ''
-  if (imageExtensions.has(extension)) return <FileImageIcon className="cvxProjectIconImage" />
-  if (videoExtensions.has(extension)) return <FileVideoIcon className="cvxProjectIconVideo" />
   if (audioExtensions.has(extension)) return <FileAudioIcon className="cvxProjectIconAudio" />
   if (codeExtensions.has(extension)) return <FileCodeIcon className="cvxProjectIconCode" />
   return <FileTextIcon className="cvxProjectIconMuted" />

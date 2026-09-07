@@ -35,6 +35,7 @@ export interface DesktopPreloadApi {
 export interface ReadyMessage {
   readonly type: 'convax:ready'
   readonly origin: string
+  readonly browserAuthUrl: string
 }
 
 export interface StartupFailureMessage {

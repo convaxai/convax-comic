@@ -2,6 +2,8 @@ import { readFile } from 'node:fs/promises'
 import { describe, expect, it } from 'vitest'
 import { BEUI_COMPONENT_CSS, BEUI_THEME_CSS } from '../src/index.js'
 
+const animatedSidebarSource = await readFile(new URL('../src/animated-sidebar.tsx', import.meta.url), 'utf8')
+const chatAppSource = await readFile(new URL('../src/chat-app.tsx', import.meta.url), 'utf8')
 const fileTreeSource = await readFile(new URL('../src/file-tree.tsx', import.meta.url), 'utf8')
 const selectSource = await readFile(new URL('../src/select.tsx', import.meta.url), 'utf8')
 
@@ -22,10 +24,64 @@ describe('BeUI theme contract', () => {
     expect(BEUI_THEME_CSS).not.toMatch(/--dsw-alias-bg-base\s*:/u)
   })
 
-  it('ships focus, reduced-motion, and file-tree selection styles', () => {
+  it('ships focus, reduced-motion, and aligned file-tree hierarchy styles', () => {
     expect(BEUI_THEME_CSS).toContain('@media (prefers-reduced-motion: reduce)')
     expect(BEUI_COMPONENT_CSS).toContain('.cvxBeuiButton:focus-visible')
     expect(BEUI_COMPONENT_CSS).toContain('.cvxBeuiFileTreeSelection')
+    expect(BEUI_COMPONENT_CSS).toMatch(/\.cvxBeuiFileTreeIcon\s*\{[^}]*width:\s*17px[^}]*flex:\s*0 0 17px/su)
+    expect(BEUI_COMPONENT_CSS).toMatch(/\.cvxBeuiFileTreeBranch\s*\{[^}]*width:\s*1px[^}]*background:\s*linear-gradient/su)
+    expect(fileTreeSource).not.toMatch(/<AnimatePresence[^>]*>\s*\{rows\.map/su)
+    expect(fileTreeSource).toContain("layout={reduce ? false : 'position'}")
+    expect(fileTreeSource).toContain('delay: Math.min(row.position * 0.025, 0.1)')
+  })
+
+  it('ships the Chat App as an accessible narrow-shell navigation surface', () => {
+    expect(BEUI_COMPONENT_CSS).toMatch(/\.cvxBeuiChatApp\s*\{[^}]*height:\s*100%[^}]*overflow:\s*hidden[^}]*isolation:\s*isolate/su)
+    expect(BEUI_COMPONENT_CSS).toMatch(/\.cvxBeuiChatAppNavigation\s*\{[^}]*position:\s*absolute[^}]*inset:\s*0[^}]*background:\s*var\(--cvx-beui-background\)/su)
+    expect(chatAppSource).toContain('Source: https://beui.dev/components/agents/chat-app')
+    expect(chatAppSource).toContain("toggleAttribute('inert', navigationOpen)")
+    expect(chatAppSource).toContain("if (event.key !== 'Escape') return")
+    expect(chatAppSource).toContain('duration: 0.28, ease: EASE_DRAWER')
+    expect(BEUI_COMPONENT_CSS).toMatch(/\.cvxBeuiChatApp \[data-beui-prompt-input\]\s*\{[^}]*padding:\s*8px[^}]*border-radius:\s*16px[^}]*background:\s*var\(--cvx-beui-background\)[^}]*container-type:\s*inline-size/su)
+    expect(BEUI_COMPONENT_CSS).toMatch(/\.cvxBeuiChatApp \[data-beui-prompt-add\],\s*\.cvxBeuiChatApp \[data-beui-prompt-send\]\s*\{[^}]*width:\s*32px/su)
+    expect(BEUI_COMPONENT_CSS).toMatch(/\.cvxBeuiChatApp \[data-beui-prompt-add\]\s*\{[^}]*border-radius:\s*var\(--cvx-beui-radius-pill\)[^}]*background:\s*transparent/su)
+    expect(BEUI_COMPONENT_CSS).toContain('[data-beui-prompt-add][data-beui-state="open"]')
+    expect(BEUI_COMPONENT_CSS).toMatch(/\.cvxBeuiChatApp \[data-beui-prompt-send\]\s*\{[^}]*border-radius:\s*var\(--cvx-beui-radius-pill\)[^}]*background:\s*var\(--cvx-beui-primary\)/su)
+    expect(BEUI_COMPONENT_CSS).toMatch(/\.cvxBeuiChatApp \[data-beui-prompt-menu\]\s*\{[^}]*width:\s*min\(480px, calc\(100% \+ 14px\)\)[^}]*padding:\s*6px[^}]*border-radius:\s*12px[^}]*background:\s*var\(--cvx-beui-background\)[^}]*will-change:\s*opacity, clip-path, transform/su)
+    expect(BEUI_COMPONENT_CSS).toMatch(/\.cvxBeuiChatApp \[data-beui-prompt-text\],\s*\.cvxBeuiChatApp \[data-beui-prompt-backdrop\],\s*\.cvxBeuiChatApp \[data-beui-prompt-mirror\]\s*\{[^}]*padding:\s*3px 8px 1px[^}]*font-size:\s*14px[^}]*line-height:\s*24px/su)
+    expect(BEUI_COMPONENT_CSS).toMatch(/\.cvxBeuiChatApp \[data-beui-prompt-row\]\s*\{[^}]*height:\s*32px[^}]*flex-wrap:\s*nowrap/su)
+    expect(BEUI_COMPONENT_CSS).toContain('.cvxBeuiChatApp [data-beui-agent-workspace-switch] { display: none; }')
+    expect(BEUI_COMPONENT_CSS).toMatch(/@container \(max-width: 430px\)[^{]*\{[^}]*\[data-beui-prompt-model\][^{]*\{[^}]*width:\s*32px/su)
+    expect(BEUI_COMPONENT_CSS).toContain('.cvxBeuiChatApp [data-beui-prompt-model] > * { display: none; }')
+    expect(BEUI_COMPONENT_CSS).toContain('translate: var(--cvx-beui-model-menu-shift, 0px) 0;')
+    expect(BEUI_COMPONENT_CSS).toMatch(/\[data-beui-prompt-trailing\]\[data-beui-quota-placeholder\]::after\s*\{[^}]*position:\s*absolute[^}]*width:\s*48px[^}]*height:\s*6px[^}]*var\(--cvx-beui-quota-progress, 0%\)/su)
+    expect(BEUI_COMPONENT_CSS).toContain('translate: var(--cvx-beui-quota-item-shift, 0px) 0;')
+    expect(BEUI_COMPONENT_CSS).toMatch(/\[data-beui-prompt-menu-option\] > :last-child\s*\{[^}]*white-space:\s*normal[^}]*text-overflow:\s*clip/su)
+  })
+
+  it('ships the Animated Sidebar as a reduced-motion-safe full-height surface', () => {
+    expect(BEUI_COMPONENT_CSS).toMatch(/\.cvxBeuiAnimatedSidebarBackdrop\s*\{[^}]*inset:\s*0[^}]*border-inline:\s*1px[^}]*border-radius:\s*0[^}]*box-shadow:\s*none/su)
+    expect(BEUI_COMPONENT_CSS).not.toMatch(/\.cvxBeuiAnimatedSidebar\s*\{[^}]*isolation:\s*isolate/su)
+    expect(BEUI_COMPONENT_CSS).not.toMatch(/\.cvxBeuiAnimatedSidebarContent\s*\{[^}]*z-index:/su)
+    expect(BEUI_COMPONENT_CSS).toContain('.cvxBeuiAnimatedSidebarGlow')
+    expect(BEUI_COMPONENT_CSS).toMatch(/\.cvxBeuiAnimatedSidebarMenuItem\s*\{[^}]*height:\s*42px[^}]*border-radius:\s*14px/su)
+    expect(BEUI_COMPONENT_CSS).toMatch(/\.cvxBeuiAnimatedSidebarMenuIcon\s*\{[^}]*width:\s*20px[^}]*flex:\s*0 0 20px/su)
+    expect(BEUI_COMPONENT_CSS).toMatch(/\.cvxBeuiAnimatedSidebarMenuItem\[data-variant="section"\]\s*\{[^}]*height:\s*36px[^}]*border-radius:\s*10px[^}]*background:\s*transparent/su)
+    expect(animatedSidebarSource).toContain('Source: https://beui.dev/components/motion/animated-sidebar')
+    expect(animatedSidebarSource).toContain('Paint-only CSS transitions')
+    expect(animatedSidebarSource).toContain('<AnimatePresence initial={false} mode="popLayout">')
+    expect(animatedSidebarSource).toContain("clipPath: 'inset(0 0 100% 0 round 8px)'")
+    expect(animatedSidebarSource).toContain("initial={reduce ? false : 'closed'}")
+    expect(animatedSidebarSource).not.toContain("height: 'auto'")
+    expect(BEUI_COMPONENT_CSS).toMatch(/\.cvxBeuiAnimatedSidebarSubmenu\s*\{[^}]*overflow:\s*hidden[^}]*will-change:\s*opacity, clip-path, transform/su)
+    expect(BEUI_COMPONENT_CSS).toMatch(/@media \(prefers-reduced-motion: reduce\)[^{]*\{[^}]*\.cvxBeuiAnimatedSidebarBackdrop,/su)
+  })
+
+  it('uses the official pop-layout submenu exit so closing content reserves no flex space', () => {
+    expect(animatedSidebarSource).toContain('<AnimatePresence initial={false} mode="popLayout">')
+    expect(animatedSidebarSource).toContain("{expanded ? (")
+    expect(animatedSidebarSource).toContain("exit={reduce ? { opacity: 0 } : 'closed'}")
+    expect(animatedSidebarSource).not.toContain('transitionEnd')
   })
 
   it('keeps Select on the official base, muted, and motion semantics', () => {
@@ -42,11 +98,17 @@ describe('BeUI theme contract', () => {
     expect(selectSource).not.toContain("from './button.js'")
   })
 
-  it('removes collapsed rows from layout synchronously instead of retaining blank space', () => {
-    expect(fileTreeSource).toContain('{rows.map(row => {')
+  it('matches beUI File Tree collapse behavior without per-row exit-height springs', () => {
     expect(fileTreeSource).not.toMatch(/<AnimatePresence[^>]*>\s*\{rows\.map/su)
-    expect(fileTreeSource).not.toContain("layout={reduce ? false : 'position'}")
-    expect(fileTreeSource).not.toContain("exit: { opacity: 0, y: -4 }")
+    expect(fileTreeSource).toContain('onPointerEnter={event => { row.item.onPointerEnter?.(event) }}')
+    expect(fileTreeSource).toContain('onPointerLeave={event => { row.item.onPointerLeave?.(event) }}')
+    expect(fileTreeSource).toContain('row.item.onFocus?.(event)')
+    expect(fileTreeSource).toContain('row.item.onBlur?.(event)')
+    expect(fileTreeSource).toContain('{row.item.label ?? row.item.name}')
+    expect(fileTreeSource).toContain("layout={reduce ? false : 'position'}")
+    expect(fileTreeSource).toContain("initial={reduce ? false : { opacity: 0, y: -6 }}")
+    expect(fileTreeSource).not.toContain("height: 'auto'")
+    expect(fileTreeSource).not.toContain('exit={{ opacity: 0, y: reduce ? 0 : -4, height: 0 }}')
   })
 
   it('only measures shared selection motion when the selected row changes', () => {

@@ -108,7 +108,22 @@ async function launch(profile) {
   if (origin.protocol !== 'http:' || origin.hostname !== '127.0.0.1' || origin.pathname !== '/') {
     throw new Error(`unsafe ready origin ${JSON.stringify(ready.origin)}`)
   }
-  return { child, origin: origin.origin, tail: () => tail, token }
+  const browserAuthUrl = new URL(ready.browserAuthUrl)
+  if (browserAuthUrl.origin !== origin.origin || browserAuthUrl.pathname !== '/'
+    || browserAuthUrl.searchParams.getAll('token').length !== 1) {
+    throw new Error('unsafe browser authentication URL')
+  }
+  const authenticated = await fetch(browserAuthUrl, {
+    headers: { [HEADER]: token },
+    redirect: 'manual',
+  })
+  const setCookie = authenticated.headers.get('set-cookie')
+  if (authenticated.status !== 303 || authenticated.headers.get('location') !== '/'
+    || setCookie === null) {
+    throw new Error(`browser authentication failed with status ${authenticated.status}`)
+  }
+  const cookie = setCookie.split(';', 1)[0]
+  return { child, origin: origin.origin, tail: () => tail, token, cookie }
 }
 
 async function authorizedUiReady(instance) {
@@ -116,7 +131,7 @@ async function authorizedUiReady(instance) {
   let last
   while (Date.now() < deadline) {
     try {
-      last = await fetch(`${instance.origin}/`, { headers: { [HEADER]: instance.token } })
+      last = await fetch(`${instance.origin}/`, { headers: { [HEADER]: instance.token, cookie: instance.cookie } })
       if (last.status === 200) return
     } catch {
       // Startup can publish the listening socket before the Web fallback row.
@@ -132,23 +147,24 @@ async function verifyFence(instance) {
   const wrong = await fetch(`${instance.origin}/api/commands/execute`, { headers: { [HEADER]: 'wrong' } })
   if (wrong.status !== 403) throw new Error(`wrong token returned ${wrong.status}`)
   await authorizedUiReady(instance)
-  const presets = await fetch(`${instance.origin}/api/agentPreset.list`, {
+  const presets = await fetch(`${instance.origin}/api/agentPresets/list`, {
     method: 'POST',
     headers: {
       [HEADER]: instance.token,
+      cookie: instance.cookie,
       'content-type': 'application/json',
     },
     body: JSON.stringify({
       type: 'client-request',
       rpcId: 'convax-preset-smoke',
-      method: 'agentPreset.list',
-      payload: {},
+      method: 'agentPresets/list',
+      payload: { args: {} },
     }),
   })
   if (presets.status !== 200) throw new Error(`Agent preset list returned ${presets.status}`)
   const envelope = await presets.json()
   const ids = envelope?.result?.value?.presets?.map?.(preset => preset.id)
-  if (JSON.stringify(ids) !== JSON.stringify(['standard', 'code'])
+  if (JSON.stringify(ids) !== JSON.stringify(['standard', 'ptc'])
     || envelope?.result?.value?.authorable !== false) {
     throw new Error(`unsafe Agent preset roster: ${JSON.stringify(envelope)}`)
   }
@@ -162,6 +178,7 @@ async function verifyCanvasRemote(instance) {
     method: 'POST',
     headers: {
       [HEADER]: instance.token,
+      cookie: instance.cookie,
       'content-type': 'application/json',
     },
     body: JSON.stringify({
@@ -192,6 +209,7 @@ async function verifyCanvasRemote(instance) {
     method: 'POST',
     headers: {
       [HEADER]: instance.token,
+      cookie: instance.cookie,
       'content-type': 'application/json',
     },
     body: JSON.stringify({

@@ -12,17 +12,26 @@ import {
   MIN_SIDEBAR_WIDTH,
   SIDEBAR_RAIL_WIDTH,
   ProjectLayout,
+  projectDetailsSessionTransition,
   projectPanelWidthFromPointer,
   resolveProjectPanelColumns,
 } from '../src/client/layout.js'
 
 const componentsSource = await readFile(new URL('../src/client/components.tsx', import.meta.url), 'utf8')
+const sessions = {
+  list: {
+    getSnapshot: () => ({}),
+    subscribe: () => () => undefined,
+  },
+  open: () => undefined,
+}
 
 function render(layout: ProjectLayout): string {
   return renderToStaticMarkup(
     <ProjectShell
       runtime={{} as never}
       layout={layout}
+      sessions={sessions}
       renderSlot={(name, owner) => <span data-test-slot={name} data-width={owner.width as number | undefined} />}
     />,
   )
@@ -50,12 +59,16 @@ describe('Project panel geometry', () => {
     const layout = new ProjectLayout()
     const open = render(layout)
     expect(open).toContain('--cvx-sidebar:300px;--cvx-agent:380px')
+    expect(open).toContain('data-slot="animated-sidebar"')
+    expect(open).toContain('aria-label="Project sidebar"')
+    expect(open).toContain('data-state="expanded"')
     expect(open).toContain('aria-label="Resize Project sidebar"')
     expect(open).toContain('aria-label="Resize Agent sidebar"')
 
     layout.toggleSidebar()
     const leftCollapsed = render(layout)
     expect(leftCollapsed).toContain(`--cvx-sidebar:${SIDEBAR_RAIL_WIDTH}px;--cvx-agent:380px`)
+    expect(leftCollapsed).toContain('data-state="collapsed"')
     expect(leftCollapsed).not.toContain('aria-label="Resize Project sidebar"')
     expect(leftCollapsed).toContain('aria-label="Resize Agent sidebar"')
 
@@ -140,6 +153,16 @@ describe('Project panel geometry', () => {
     expect(projectPanelWidthFromPointer('sidebar', 300, 300, 240)).toBe(240)
     expect(projectPanelWidthFromPointer('agent', 380, 900, 840)).toBe(440)
     expect(projectPanelWidthFromPointer('agent', 380, 900, 960)).toBe(320)
+  })
+
+  it('mirrors pinned AppFrame details cleanup across nonblank session changes', () => {
+    expect(projectDetailsSessionTransition(undefined, undefined)).toEqual({ lastSession: undefined, closeDetails: false })
+    expect(projectDetailsSessionTransition(undefined, 'session-a')).toEqual({ lastSession: 'session-a', closeDetails: false })
+    expect(projectDetailsSessionTransition('session-a', undefined)).toEqual({ lastSession: 'session-a', closeDetails: false })
+    expect(projectDetailsSessionTransition('session-a', 'session-a')).toEqual({ lastSession: 'session-a', closeDetails: false })
+    expect(projectDetailsSessionTransition('session-a', 'session-b')).toEqual({ lastSession: 'session-b', closeDetails: true })
+    expect(componentsSource).toContain('useClientLayoutEffect(() => {')
+    expect(componentsSource).toContain('if (transition.closeDetails) props.layout.closeDetails()')
   })
 
   it('publishes panel transitions and reopens Agent for details', () => {

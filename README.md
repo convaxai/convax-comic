@@ -51,7 +51,7 @@ beside this repository:
 
 ```bash
 git clone https://github.com/deepseek-ai/deepseek-harness.git ../deepseek-harness
-git -C ../deepseek-harness checkout b150a551b8d465e31e418e1b2eaf5e79bbb7d28e
+git -C ../deepseek-harness checkout a66e4702047846cdaa10c66c9d3df3951f5ea70d
 yarn upstream:build
 ```
 

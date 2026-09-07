@@ -172,7 +172,7 @@ class FakeWrappedRemote {
   }
 
   private failure<T>(code: string, message: string): RemoteResult<T> {
-    return { ok: false, error: { code, message, details: {} } }
+    return { ok: false, error: { code, message, details: {} } } as unknown as RemoteResult<T>
   }
 }
 
@@ -193,13 +193,13 @@ describe('CanvasProjectSync V2', () => {
     expect(unwrapCanvasRemoteV2Result({ ok: true, value: 3 })).toBe(3)
     expect(() => unwrapCanvasRemoteV2Result({
       ok: false,
-      error: { code: 'REVISION_CONFLICT', message: 'stale', details: {} },
-    })).toThrow(CanvasRemoteV2Error)
+      error: { code: 'gateway/bad-request', message: 'stale', details: {} },
+    } as never)).toThrow(CanvasRemoteV2Error)
     expect(() => unwrapCanvasRemoteV2Result({ ok: true, value: 3, extra: true } as never)).toThrow(TypeError)
     expect(() => unwrapCanvasRemoteV2Result({
       ok: false,
       error: { code: 'bad', message: 'bad', details: JSON.parse('{"__proto__":true}') },
-    })).toThrow(TypeError)
+    } as never)).toThrow(TypeError)
   })
 
   it('starts one active waiter and exposes stable project, workspace, registry, and client surfaces', async () => {

@@ -178,7 +178,7 @@ terminal.onExit(event => {
       CONVAX_CONTROL_TOKEN: token,
       CONVAX_PROJECTS_HOME: productData,
       DSH_HOME: harnessHome,
-      DSH_TELEMETRY_DISABLED: '1',
+      DSH_TELEMETRY_MODE: 'DISABLED',
       HOME: isolatedHome,
       PATH: emptyPath,
       TMPDIR: tmpdir(),
@@ -198,27 +198,42 @@ terminal.onExit(event => {
   }
   const denied = await fetch(origin.origin)
   if (denied.status !== 403) throw new Error(`packaged auth fence returned ${denied.status} without token`)
-  const allowed = await fetch(origin.origin, {
+  const browserAuthUrl = new URL(ready.browserAuthUrl)
+  if (browserAuthUrl.origin !== origin.origin || browserAuthUrl.pathname !== '/'
+    || browserAuthUrl.searchParams.getAll('token').length !== 1) {
+    throw new Error('packaged DSH reported unsafe browser authentication URL')
+  }
+  const authenticated = await fetch(browserAuthUrl, {
     headers: { 'x-convax-control-token': token },
+    redirect: 'manual',
   })
-  if (allowed.status !== 200) throw new Error(`packaged UI returned ${allowed.status} with token`)
-  const presets = await fetch(`${origin.origin}/api/agentPreset.list`, {
+  const setCookie = authenticated.headers.get('set-cookie')
+  if (authenticated.status !== 303 || authenticated.headers.get('location') !== '/' || setCookie === null) {
+    throw new Error(`packaged browser authentication failed with status ${authenticated.status}`)
+  }
+  const cookie = setCookie.split(';', 1)[0]
+  const allowed = await fetch(origin.origin, {
+    headers: { 'x-convax-control-token': token, cookie },
+  })
+  if (allowed.status !== 200) throw new Error(`packaged UI returned ${allowed.status} with dual auth`)
+  const presets = await fetch(`${origin.origin}/api/agentPresets/list`, {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
       'x-convax-control-token': token,
+      cookie,
     },
     body: JSON.stringify({
       type: 'client-request',
       rpcId: 'convax-packaged-preset-smoke',
-      method: 'agentPreset.list',
-      payload: {},
+      method: 'agentPresets/list',
+      payload: { args: {} },
     }),
   })
   const presetEnvelope = await presets.json()
   const presetIds = presetEnvelope?.result?.value?.presets?.map?.(preset => preset.id)
   if (presets.status !== 200
-    || JSON.stringify(presetIds) !== JSON.stringify(['standard', 'code'])
+    || JSON.stringify(presetIds) !== JSON.stringify(['standard', 'ptc'])
     || presetEnvelope?.result?.value?.authorable !== false) {
     throw new Error(`packaged Agent preset policy failed: ${JSON.stringify(presetEnvelope)}`)
   }
@@ -231,6 +246,7 @@ terminal.onExit(event => {
     headers: {
       'content-type': 'application/json',
       'x-convax-control-token': token,
+      cookie,
     },
     body: JSON.stringify({
       type: 'client-request',
@@ -261,6 +277,7 @@ terminal.onExit(event => {
     headers: {
       'content-type': 'application/json',
       'x-convax-control-token': token,
+      cookie,
     },
     body: JSON.stringify({
       type: 'client-request',

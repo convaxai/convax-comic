@@ -1,4 +1,4 @@
-import type { Session } from 'electron'
+import type { ClientRequest, ClientRequestConstructorOptions, Session } from 'electron'
 import { CONTROL_TOKEN_HEADER, type LaunchContext } from './types.js'
 
 export type NavigationDecision = 'allow' | 'external' | 'deny'
@@ -19,6 +19,88 @@ export function normalizeLoopbackOrigin(value: string): string | null {
   } catch {
     return null
   }
+}
+
+export function normalizeBrowserAuthUrl(value: string, origin: string): string | null {
+  try {
+    const url = new URL(value)
+    if (url.origin !== origin || url.pathname !== '/' || url.hash !== '') return null
+    const tokens = url.searchParams.getAll('token')
+    if (tokens.length !== 1 || tokens[0] === '' || [...url.searchParams.keys()].some(key => key !== 'token')) return null
+    return url.href
+  } catch {
+    return null
+  }
+}
+
+export function browserAuthRedirectAccepted(
+  statusCode: number,
+  method: string,
+  redirectUrl: string,
+  expectedOrigin: string,
+): boolean {
+  try {
+    const target = new URL(redirectUrl)
+    return statusCode === 303
+      && method === 'GET'
+      && target.origin === expectedOrigin
+      && target.pathname === '/'
+      && target.search === ''
+      && target.hash === ''
+  } catch {
+    return false
+  }
+}
+
+export type BrowserAuthRequestFactory = (
+  options: ClientRequestConstructorOptions,
+) => ClientRequest
+
+export async function authenticateBrowserSession(
+  createRequest: BrowserAuthRequestFactory,
+  targetSession: Session,
+  browserAuthUrl: string,
+  expectedOrigin: string,
+  controlToken: string,
+): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    let settled = false
+    let followed = false
+    const request = createRequest({
+      url: browserAuthUrl,
+      session: targetSession,
+      credentials: 'include',
+      headers: { [CONTROL_TOKEN_HEADER]: controlToken },
+      redirect: 'manual',
+    })
+    const fail = (error: Error, abort = true): void => {
+      if (settled) return
+      settled = true
+      if (abort) request.abort()
+      reject(error)
+    }
+    request.on('redirect', (statusCode, method, redirectUrl) => {
+      if (followed || !browserAuthRedirectAccepted(statusCode, method, redirectUrl, expectedOrigin)) {
+        fail(new Error('DSH browser authentication returned an invalid redirect'))
+        return
+      }
+      followed = true
+      request.followRedirect()
+    })
+    request.once('response', (response) => {
+      response.on('data', () => undefined)
+      const status = response.statusCode ?? 0
+      if (!followed || status !== 200) {
+        fail(new Error(`DSH browser authentication failed with status ${String(status)}`), false)
+        return
+      }
+      if (settled) return
+      settled = true
+      resolve()
+    })
+    request.once('error', error => { fail(error, false) })
+    request.end()
+  })
 }
 
 export function navigationDecision(

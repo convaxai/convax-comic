@@ -33,6 +33,7 @@ import {
   type ComicCanvasViewport,
 } from './comic-ui-contract.js'
 import { CanvasClientService } from './canvas-client-service.js'
+import { ProjectImagePreviews, projectFileAssetId, projectImagePath } from './project-image-previews.js'
 import type { CanvasRendererRegistry } from './renderer-registry.js'
 import { edgeUpdatePatch, invertCanvasPatch, nodeUpdatePatch } from './v2-patch.js'
 
@@ -288,6 +289,7 @@ export class ComicCanvasWorkspace {
   readonly #disposeService: boolean
   readonly #lifecycle = new AbortController()
   readonly #temporaryAssets = new Map<string, TemporaryAsset>()
+  readonly #projectImages: ProjectImagePreviews | undefined
   readonly #listeners = new Set<() => void>()
   readonly #pending = new Set<Promise<void>>()
   readonly #errors: unknown[] = []
@@ -315,6 +317,12 @@ export class ComicCanvasWorkspace {
     this.#open = options.initiallyOpen ?? false
     this.#snapshot = this.#project()
     this.#unsubscribeState = this.#subscribeService(service)
+    this.#projectImages = this.#readProjectFile === undefined ? undefined : new ProjectImagePreviews(
+      this.#readProjectFile, this.#objectUrl,
+      () => { if (!this.#disposed) { this.#snapshot = this.#project(); this.#emit() } },
+      this.#mediaPolicy.image.maxBytes, this.#mediaPolicy.image.mimeTypes,
+    )
+    this.#syncProjectImages()
   }
 
   /** Switch the active Canvas while retaining one stable workbench facade. */
@@ -329,6 +337,8 @@ export class ComicCanvasWorkspace {
     this.#gesture = undefined
     this.#snapshot = this.#project()
     this.#releaseOrphanedTemporaryAssets()
+    this.#projectImages?.sync(new Map())
+    this.#syncProjectImages()
     this.#emit()
     return previous
   }
@@ -668,6 +678,8 @@ export class ComicCanvasWorkspace {
     const node = this.#service.getSnapshot().nodes[id]
     if (node === undefined || !isImageNode(node)) return undefined
     const source = node.data.source
+    const recovered = this.#projectImages?.get(source.type === 'url' ? source.url : source.assetId)
+    if (recovered !== undefined) return recovered
     if (source.type === 'url') return source.url
     return this.#temporaryAssets.get(source.assetId)?.url ?? this.#resolveAssetUrl?.(source.assetId)
   }
@@ -691,7 +703,12 @@ export class ComicCanvasWorkspace {
     const buffer = new ArrayBuffer(bytes.byteLength)
     new Uint8Array(buffer).set(bytes)
     const file = new File([buffer], content.name, { type: content.mimeType })
-    return this.addDroppedFiles([file], position)
+    this.#validateFile(file)
+    // Keep the authoritative workspace-relative source, not a session-only File ID.
+    const assetId = projectFileAssetId(path)
+    const id = this.createNode({ kind: 'image', position, title: content.name, alt: content.name,
+      source: { type: 'asset', assetId } })
+    return [id]
   }
 
   async addDroppedFiles(files: CanvasFileCollection, position: ComicCanvasPoint): Promise<string[]> {
@@ -748,6 +765,7 @@ export class ComicCanvasWorkspace {
     this.#unsubscribeState()
     for (const asset of this.#temporaryAssets.values()) this.#objectUrl.revokeObjectURL(asset.url)
     this.#temporaryAssets.clear()
+    this.#projectImages?.dispose()
     this.#listeners.clear()
     this.#gesture = undefined
     if (this.#disposeService) this.#track(this.#service.dispose())
@@ -758,8 +776,20 @@ export class ComicCanvasWorkspace {
       if (this.#disposed || service !== this.#service) return
       this.#snapshot = this.#project()
       this.#releaseOrphanedTemporaryAssets()
+      this.#syncProjectImages()
       this.#emit()
     })
+  }
+
+  #syncProjectImages(): void {
+    const sources = new Map<string, string>()
+    for (const node of Object.values(this.#service.getSnapshot().nodes)) {
+      if (!isImageNode(node)) continue
+      const source = node.data.source
+      const path = projectImagePath(source)
+      if (path !== undefined) sources.set(source.type === 'url' ? source.url : source.assetId, path)
+    }
+    this.#projectImages?.sync(sources)
   }
 
   #project(): ComicCanvasWorkspaceSnapshot {

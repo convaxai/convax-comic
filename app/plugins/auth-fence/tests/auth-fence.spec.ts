@@ -52,6 +52,9 @@ async function boot(token: string | undefined, port = 0): Promise<RunningServer>
   else process.env[CONTROL_TOKEN_ENV] = token
 
   const context = new Context()
+  context.provide('connection', {
+    authenticatedUrl: (origin: string) => `${origin}/?token=test-launch-token`,
+  })
   try {
     const fiber = context.plugin(AuthenticatedWebServer, { host: LOOPBACK_HOST, port })
     fibers.add(fiber)
@@ -244,6 +247,7 @@ describe('@convax/auth-fence', () => {
     expect(messages).toEqual([{
       type: 'convax:ready',
       origin: `http://${LOOPBACK_HOST}:${String(server.port)}`,
+      browserAuthUrl: `http://${LOOPBACK_HOST}:${String(server.port)}/?token=test-launch-token`,
     }])
     expect(JSON.stringify(messages)).not.toContain(VALID_TOKEN)
   })

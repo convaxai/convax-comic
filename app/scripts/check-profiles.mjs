@@ -165,8 +165,8 @@ if (defaultProfile.byId.get('ui-layout')?.disabled !== true) {
 if (defaultProfile.byId.has('ui-sidebar')) {
   fail('default overrides the official DSH sidebar shell')
 }
-if (defaultProfile.byId.get('ui-workspace')?.disabled !== true) {
-  fail('default does not release sidebar.workspaces for the product navigator')
+if (defaultProfile.byId.has('ui-workspace')) {
+  fail('default overrides the official uiWorkspace service provider')
 }
 for (const [id, packageName] of [
   ['app-runtime', '@convax/runtime'],
@@ -183,19 +183,20 @@ const codexConnect = defaultProfile.insertedById.get('llm-openai-codex')
 if (codexConnect?.name !== 'dsh-codex-connect'
   || JSON.stringify(codexConnect.config) !== JSON.stringify({
     enableProxy: false,
-    enableSearch: true,
+    enableSearch: false,
     enableImageTool: true,
     enableImageGeneration: true,
+    enableAutoReview: false,
   })) {
   fail('default does not mount Codex Connect with the approved optional capabilities')
 }
-if (desktopManifest.dependencies?.['dsh-codex-connect'] !== '0.1.0-alpha.4.20'
-  || desktopManifest.dependencies?.['@earendil-works/pi-ai'] !== '0.82.1'
-  || desktopManifest.dependencies?.['@deepseek-ai/dsh-llm-pi-ai'] !== '0.1.1-rc.2') {
+if (desktopManifest.dependencies?.['dsh-codex-connect'] !== '0.1.0-alpha.4.30'
+  || desktopManifest.dependencies?.['@earendil-works/pi-ai'] !== '0.84.4'
+  || desktopManifest.dependencies?.['@deepseek-ai/dsh-llm-pi-ai'] !== '0.1.2-rc.1') {
   fail('Codex Connect or its verified runtime peers are not exactly pinned')
 }
 if (JSON.stringify(yarnConfig.npmPreapprovedPackages)
-    !== JSON.stringify(['dsh-codex-connect@0.1.0-alpha.4.20'])
+    !== JSON.stringify(['dsh-codex-connect@0.1.0-alpha.4.30'])
   || yarnConfig.approvedGitRepositories !== undefined) {
   fail('Codex Connect supply-chain exception is not limited to its exact npm descriptor')
 }

@@ -1,5 +1,5 @@
 import { createRequire } from 'node:module'
-import { dirname, isAbsolute, join } from 'node:path'
+import { isAbsolute, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import type { Context } from '@deepseek-ai/cordis'
 import type AgentPresetsType from '@deepseek-ai/dsh-agent-presets'
@@ -8,7 +8,7 @@ import type {
   Config,
 } from '@deepseek-ai/dsh-agent-presets'
 
-export const ALLOWED_AGENT_PRESETS = Object.freeze(['standard', 'code'] as const)
+export const ALLOWED_AGENT_PRESETS = Object.freeze(['standard', 'ptc'] as const)
 const allowed = new Set<string>(ALLOWED_AGENT_PRESETS)
 const localRequire = createRequire(import.meta.url)
 
@@ -39,16 +39,13 @@ export function filterAllowedAgentPresets(
   return presets.filter((preset) => isAllowedAgentPreset(preset.id))
 }
 
-function shippedPresetRoot(): string {
-  return join(dirname(canonicalRequire.resolve('@deepseek-ai/dsh/package.json')), 'config', 'agent-presets')
-}
-
 /** Product roster that excludes presets which bypass the Host permission seam. */
 export default class ConvaxAgentPresets extends AgentPresets {
   constructor(ctx: Context, config: Config) {
     super(ctx, {
       default: isAllowedAgentPreset(config.default) ? config.default : 'standard',
-      roots: [{ path: shippedPresetRoot(), trust: 'system' }],
+      roots: [],
+      includeShippedRoot: true,
       includeUserRoot: false,
     })
   }

@@ -377,10 +377,44 @@ describe('ComicCanvasWorkspace temporary image media', () => {
     const serialized = JSON.stringify(service.getSnapshot())
     expect(serialized).not.toContain('iVBORw0KGgo=')
     expect(serialized).not.toContain('blob:comic-1')
+    expect(service.getSnapshot().nodes[imageIds[0]!]!.data.source).toEqual({
+      type: 'asset', assetId: 'project-file:art/cover.png',
+    })
     expect(readProjectFile).toHaveBeenNthCalledWith(1, 'notes/beat.md', expect.any(AbortSignal))
     expect(readProjectFile).toHaveBeenNthCalledWith(2, 'art/cover.png', expect.any(AbortSignal))
     workspace.dispose()
     expect(objectUrl.revoked).toEqual(['blob:comic-1'])
+  })
+
+  it('rehydrates persisted workspace paths and legacy loopback URLs without rewriting nodes', async () => {
+    const initial = document()
+    initial.nodes.image!.data.source = { type: 'url', url: 'http://127.0.0.1:61234/art/cover.png' }
+    initial.nodes.local = { ...structuredClone(initial.nodes.image!), id: 'local',
+      data: { title: 'Local', alt: '', source: { type: 'asset', assetId: 'project-file:art/local.png' } } }
+    initial.nodes.lost = { ...structuredClone(initial.nodes.image!), id: 'lost',
+      data: { title: 'cover.png', alt: '', source: { type: 'asset', assetId: 'asset:v2-1' } } }
+    const remote = new FakeRemote(initial)
+    const service = new CanvasClientService(remote, {
+      workspaceId: initial.workspaceId, projectId: 'project-main', canvasId: initial.id, revisionWaitMs: 30_000,
+    })
+    await service.start()
+    const objectUrl = urls()
+    const reader = vi.fn(async (path: string): Promise<CanvasProjectFileContent> => ({
+      kind: 'image', path, name: 'cover.png', size: 8, mimeType: 'image/png', dataBase64: 'iVBORw0KGgo=',
+    }))
+    for (let restart = 0; restart < 2; restart++) {
+      const workspace = new ComicCanvasWorkspace(service, { disposeService: false, objectUrl, readProjectFile: reader })
+      for (let tick = 0; tick < 8; tick++) await Promise.resolve()
+      expect(workspace.getMediaPreviewUrl('image')).toMatch(/^blob:comic-/u)
+      expect(workspace.getMediaPreviewUrl('local')).toMatch(/^blob:comic-/u)
+      expect(workspace.getMediaPreviewUrl('lost')).toBeUndefined()
+      expect(service.getSnapshot()).toEqual(initial)
+      expect(remote.writes).toEqual([])
+      workspace.dispose()
+    }
+    expect(reader).toHaveBeenCalledTimes(4)
+    expect(objectUrl.revoked).toHaveLength(4)
+    await service.dispose()
   })
 
   it('cancels an in-flight project file import when its project workspace is disposed', async () => {

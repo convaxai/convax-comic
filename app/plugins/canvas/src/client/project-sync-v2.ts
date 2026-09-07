@@ -66,7 +66,7 @@ export function unwrapCanvasRemoteV2Result<T>(result: RemoteResult<T>): T {
   }
   if (!exactKeys(result, ['ok', 'error']) || !isPlainObject(result.error)
     || !exactKeys(result.error, ['code', 'message', 'details'])
-    || typeof result.error.code !== 'string' || result.error.code === ''
+    || typeof result.error.code !== 'string'
     || typeof result.error.message !== 'string'
     || !isPlainObject(result.error.details) || !isJsonValue(result.error.details)) {
     throw new TypeError('Malformed Canvas V2 failure result')

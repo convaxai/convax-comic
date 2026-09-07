@@ -1,4 +1,6 @@
 import {
+  AnimatedSidebarMenuItem,
+  AnimatedSidebarSubmenu,
   Button,
   FileTree,
   FileTreeFile,
@@ -14,12 +16,12 @@ import {
   CanvasIcon,
   CanvasStyles,
   CanvasView,
-  ChevronRightIcon,
   KindIcon,
   PlusIcon,
   kindLabel,
 } from './CanvasView.tsx'
 import { ComicCanvasWorkspace } from './comic-workspace-v2.js'
+import type { ComicCanvasNode } from './comic-ui-contract.js'
 import type { CanvasProjectSync } from './project-sync-v2.js'
 
 function useWorkspace(workspace: ComicCanvasWorkspace) {
@@ -43,6 +45,25 @@ export interface CanvasProjectCanvasesProps {
 const canvasTreeValue = (canvasId: string): string => `canvas:${canvasId}`
 const canvasNodeTreeValue = (nodeId: string): string => `node:${nodeId}`
 
+function CanvasTreeNodePreviewIcon({
+  workspace,
+  node,
+}: {
+  readonly workspace: ComicCanvasWorkspace
+  readonly node: ComicCanvasNode
+}): ReactElement {
+  if (node.kind === 'image') {
+    const previewUrl = workspace.getMediaPreviewUrl(node.id)
+    if (previewUrl !== undefined) {
+      return <img className="cvxCanvasTreeImagePreview" src={previewUrl} alt="" draggable={false} />
+    }
+  }
+  if (node.kind === 'note' && node.text.trim() !== '') {
+    return <span className="cvxCanvasTreeTextPreview">{Array.from(node.text.trim()).slice(0, 2).join('')}</span>
+  }
+  return <KindIcon kind={node.kind} size={13} />
+}
+
 /** Canvas-owned collapsible section nested through the project sidebar Slot. */
 export function CanvasProjectCanvases({ workspace, canvasProject }: CanvasProjectCanvasesProps): ReactElement {
   const snapshot = useWorkspace(workspace)
@@ -64,27 +85,25 @@ export function CanvasProjectCanvases({ workspace, canvasProject }: CanvasProjec
     <>
       <CanvasStyles />
       <section className="cvxTreeSection cvxCanvasTreeSection" aria-label="Canvases" data-expanded={expanded || undefined}>
-        <header>
-          <button
-            type="button"
-            className="cvxTreeSectionToggle"
-            aria-expanded={expanded}
-            onClick={() => { setExpanded(value => !value) }}
-          >
-            <ChevronRightIcon className="cvxTreeSectionChevron" size={14} />
-            <span>Canvases</span>
-            <small>{projectSnapshot.canvases.length}</small>
-          </button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="cvxTreeAdd"
-            aria-label="New canvas"
-            title="New canvas"
-            onClick={() => { runProjectAction(() => canvasProject.createCanvas()) }}
-          ><PlusIcon size={13} /></Button>
-        </header>
-        {expanded && (
+        <AnimatedSidebarMenuItem
+          className="cvxCanvasSectionItem"
+          variant="section"
+          label="Canvases"
+          meta={projectSnapshot.canvases.length}
+          expanded={expanded}
+          onToggle={() => { setExpanded(value => !value) }}
+          actions={(
+            <Button
+              variant="ghost"
+              size="icon"
+              className="cvxTreeAdd"
+              aria-label="New canvas"
+              title="New canvas"
+              onClick={() => { runProjectAction(() => canvasProject.createCanvas()) }}
+            ><PlusIcon size={13} /></Button>
+          )}
+        />
+        <AnimatedSidebarSubmenu expanded={expanded} className="cvxCanvasSectionMotion">
           <div className="cvxTreeSectionBody">
             <FileTree
               ariaLabel="Canvases"
@@ -115,7 +134,7 @@ export function CanvasProjectCanvases({ workspace, canvasProject }: CanvasProjec
                         key={node.id}
                         value={canvasNodeTreeValue(node.id)}
                         name={node.title || kindLabel(node.kind)}
-                        icon={<KindIcon kind={node.kind} size={13} />}
+                        icon={<CanvasTreeNodePreviewIcon workspace={workspace} node={node} />}
                       />
                     ))}
                   </FileTreeFolder>
@@ -124,7 +143,7 @@ export function CanvasProjectCanvases({ workspace, canvasProject }: CanvasProjec
             </FileTree>
             {projectError !== undefined && <p className="cvxTreeError" role="alert">{projectError}</p>}
           </div>
-        )}
+        </AnimatedSidebarSubmenu>
       </section>
     </>
   )

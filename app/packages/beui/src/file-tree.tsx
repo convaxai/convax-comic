@@ -7,7 +7,9 @@ import {
   Fragment,
   isValidElement,
   type DragEvent,
+  type FocusEvent,
   type KeyboardEvent,
+  type PointerEvent,
   type ReactNode,
   useCallback,
   useEffect,
@@ -30,12 +32,17 @@ interface FileTreeItem {
   readonly value: string
   readonly name: string
   readonly type: 'file' | 'folder'
+  readonly label?: ReactNode | undefined
   readonly children?: readonly FileTreeItem[] | undefined
   readonly icon?: FileTreeIcon | undefined
   readonly disabled?: boolean | undefined
   readonly className?: string | undefined
   readonly draggable?: boolean | undefined
+  readonly onBlur?: ((event: FocusEvent<HTMLButtonElement>) => void) | undefined
   readonly onDragStart?: ((event: DragEvent<HTMLButtonElement>) => void) | undefined
+  readonly onFocus?: ((event: FocusEvent<HTMLButtonElement>) => void) | undefined
+  readonly onPointerEnter?: ((event: PointerEvent<HTMLButtonElement>) => void) | undefined
+  readonly onPointerLeave?: ((event: PointerEvent<HTMLButtonElement>) => void) | undefined
 }
 
 export interface FileTreeFolderProps {
@@ -50,11 +57,16 @@ export interface FileTreeFolderProps {
 export interface FileTreeFileProps {
   readonly value: string
   readonly name: string
+  readonly label?: ReactNode
   readonly icon?: FileTreeIcon
   readonly disabled?: boolean
   readonly className?: string
   readonly draggable?: boolean
+  readonly onBlur?: (event: FocusEvent<HTMLButtonElement>) => void
   readonly onDragStart?: (event: DragEvent<HTMLButtonElement>) => void
+  readonly onFocus?: (event: FocusEvent<HTMLButtonElement>) => void
+  readonly onPointerEnter?: (event: PointerEvent<HTMLButtonElement>) => void
+  readonly onPointerLeave?: (event: PointerEvent<HTMLButtonElement>) => void
 }
 
 export interface FileTreeClassNames {
@@ -89,6 +101,8 @@ interface FlatFileTreeItem {
 export function FileTreeFolder(_props: FileTreeFolderProps): null { return null }
 export function FileTreeFile(_props: FileTreeFileProps): null { return null }
 
+const ROW_ENTER = { duration: 0.22, ease: EASE_OUT } as const
+
 function classes(...values: Array<string | false | null | undefined>): string {
   return values.filter(Boolean).join(' ')
 }
@@ -120,11 +134,16 @@ function itemsFromChildren(children: ReactNode): readonly FileTreeItem[] {
         value: props.value,
         name: props.name,
         type: 'file',
+        label: props.label,
         icon: props.icon,
         disabled: props.disabled,
         className: props.className,
         draggable: props.draggable,
+        onBlur: props.onBlur,
         onDragStart: props.onDragStart,
+        onFocus: props.onFocus,
+        onPointerEnter: props.onPointerEnter,
+        onPointerLeave: props.onPointerLeave,
       })
     }
   })
@@ -276,9 +295,16 @@ export function FileTree({
           return (
             <motion.div
               key={row.item.value}
+              layout={reduce ? false : 'position'}
               initial={reduce ? false : { opacity: 0, y: -6 }}
-              animate={{ opacity: row.item.disabled === true ? 0.42 : 1, y: 0 }}
-              transition={reduce ? { duration: 0 } : { duration: 0.18, ease: EASE_OUT }}
+              animate={{
+                opacity: row.item.disabled === true ? 0.42 : 1,
+                y: 0,
+                transition: reduce
+                  ? { duration: 0 }
+                  : { ...ROW_ENTER, delay: Math.min(row.position * 0.025, 0.1) },
+              }}
+              transition={reduce ? { duration: 0 } : SPRING_LAYOUT}
               className="cvxBeuiFileTreeRowShell"
             >
               <button
@@ -299,7 +325,13 @@ export function FileTree({
                 className={classes('cvxBeuiFileTreeItem', isSelected && 'is-selected', classNames?.item, row.item.className)}
                 style={{ paddingLeft: 8 + row.depth * indent }}
                 onMouseEnter={() => { setHoveredId(row.item.value) }}
-                onFocus={() => { setFocusedId(row.item.value) }}
+                onPointerEnter={event => { row.item.onPointerEnter?.(event) }}
+                onPointerLeave={event => { row.item.onPointerLeave?.(event) }}
+                onBlur={event => { row.item.onBlur?.(event) }}
+                onFocus={event => {
+                  setFocusedId(row.item.value)
+                  row.item.onFocus?.(event)
+                }}
                 onDragStart={event => {
                   if (row.item.type !== 'file' || row.item.disabled === true || row.item.draggable !== true) {
                     event.preventDefault()
@@ -351,7 +383,7 @@ export function FileTree({
                 <span aria-hidden="true" className={classes('cvxBeuiFileTreeIcon', classNames?.icon)}>
                   {renderIcon(row.item, isOpen, reduce)}
                 </span>
-                <span className={classes('cvxBeuiFileTreeLabel', classNames?.label)}>{row.item.name}</span>
+                <span className={classes('cvxBeuiFileTreeLabel', classNames?.label)}>{row.item.label ?? row.item.name}</span>
               </button>
             </motion.div>
           )

@@ -4,7 +4,13 @@ import { apply } from '../src/client/index.ts'
 import { PROJECT_FILES_REMOTE_CONTRIBUTION } from '../src/remote-contract.ts'
 
 interface Registration {
-  readonly options: { readonly name: string; readonly id?: string; readonly children?: Readonly<Record<string, unknown>> }
+  readonly options: {
+    readonly name: string
+    readonly id?: string
+    readonly priority?: number
+    readonly children?: Readonly<Record<string, unknown>>
+    readonly inject?: () => Record<string, unknown>
+  }
   readonly component: unknown
   readonly dispose: ReturnType<typeof vi.fn>
 }
@@ -37,7 +43,7 @@ describe('project Client plugin', () => {
     const scopeDisposers: Array<ReturnType<typeof vi.fn>> = []
     const workspaceFeed = observable({
       items: [{ workspaceId: 'workspace-1', title: 'Project', sessionIds: ['session-1'] }],
-      baselinesReady: true,
+      phase: 'ready',
       recentWorkspaceId: 'workspace-1' as string | undefined,
     })
     const sessionFeed = observable({ current: 'session-1' as string | undefined })
@@ -58,6 +64,11 @@ describe('project Client plugin', () => {
         ok: true,
         value: { kind: 'text', path, name: 'README.md', size: 2, mimeType: 'text/markdown', text: 'hi' },
       })),
+      preview: vi.fn(async ({ path }: { readonly path: string }) => ({
+        ok: true,
+        value: { kind: 'text', path, name: 'README.md', size: 2, mimeType: 'text/markdown', text: 'hi' },
+      })),
+      releasePreview: vi.fn(async () => ({ ok: true, value: { released: true } })),
       wait,
       close: vi.fn(async () => ({ ok: true, value: { closed: true } })),
     }
@@ -96,8 +107,10 @@ describe('project Client plugin', () => {
       provide,
       workspaces: {
         list: workspaceFeed.store,
-        connectWorkspace: vi.fn(async () => 'session-1'),
         create: vi.fn(),
+      },
+      uiWorkspace: {
+        connectWorkspace: vi.fn(async () => 'session-1'),
         pickDirectory: vi.fn(),
       },
       sessions: {
@@ -132,13 +145,41 @@ describe('project Client plugin', () => {
     expect(remote.$mount).toHaveBeenCalledWith(PROJECT_FILES_REMOTE_CONTRIBUTION)
     expect(injectRemote).toHaveBeenCalledOnce()
     expect(registrations[0]).toMatchObject({ options: { name: 'root' }, component: ProjectShell })
-    expect(registrations.some(entry => entry.component === ProjectNavigator)).toBe(true)
-    expect(registrations.some(entry => entry.component === WorkbenchAgentPanel)).toBe(true)
+    expect(registrations[0]?.options.inject?.()).toMatchObject({
+      runtime: expect.any(Object),
+      layout: expect.any(Object),
+      sessions: ctx.sessions,
+    })
+    expect(registrations.find(entry => entry.component === ProjectNavigator)?.options).toMatchObject({
+      name: 'sidebar.workspaces', priority: -100,
+    })
+    const agentRegistration = registrations.find(entry => entry.component === WorkbenchAgentPanel)
+    expect(agentRegistration).toBeDefined()
+    expect(agentRegistration?.options.children).toMatchObject({
+      conversation: { kind: 'single', scope: 'session-maybe' },
+      details: { kind: 'single', scope: 'session' },
+    })
+    expect(agentRegistration?.options.inject?.()).toMatchObject({
+      runtime: expect.any(Object),
+      sessions: ctx.sessions,
+      workspaces: ctx.workspaces,
+    })
     expect(providers.get('comicProject')).toMatchObject({ workspaceId: 'workspace-1', projectId: 'project:root' })
-    const firstScope = providers.get('comicProject') as { readFile(path: string, signal: AbortSignal): Promise<unknown> }
+    const firstScope = providers.get('comicProject') as {
+      readFile(path: string, signal: AbortSignal): Promise<unknown>
+      previewFile(path: string, signal: AbortSignal): Promise<unknown>
+      releasePreview(previewId: string): Promise<void>
+    }
     const readSignal = new AbortController().signal
     await expect(firstScope.readFile('README.md', readSignal)).resolves.toMatchObject({ kind: 'text', text: 'hi' })
     expect(projectFiles.read).toHaveBeenCalledWith({ workspaceId: 'workspace-1', path: 'README.md' }, readSignal)
+    await expect(firstScope.previewFile('README.md', readSignal)).resolves.toMatchObject({ kind: 'text', text: 'hi' })
+    expect(projectFiles.preview).toHaveBeenCalledWith({ workspaceId: 'workspace-1', path: 'README.md' }, readSignal)
+    projectFiles.preview.mockRejectedValueOnce(new Error('client api: projectFiles/preview failed: transport failure for /api/projectFiles/preview: HTTP 404'))
+    await expect(firstScope.previewFile('README.md', readSignal)).resolves.toMatchObject({ kind: 'text', text: 'hi' })
+    expect(projectFiles.read).toHaveBeenCalledTimes(2)
+    await firstScope.releasePreview('preview-1')
+    expect(projectFiles.releasePreview).toHaveBeenCalledWith({ previewId: 'preview-1' })
     expect(providers.has('layout')).toBe(true)
 
     workspaceFeed.set({
@@ -146,7 +187,7 @@ describe('project Client plugin', () => {
         { workspaceId: 'workspace-1', title: 'Project', sessionIds: ['session-1'] },
         { workspaceId: 'workspace-2', title: 'Other', sessionIds: ['session-2'] },
       ],
-      baselinesReady: true,
+      phase: 'ready',
       recentWorkspaceId: 'workspace-2',
     })
     sessionFeed.set({ current: 'session-2' })

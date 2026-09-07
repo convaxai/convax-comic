@@ -19,9 +19,9 @@ describe('Convax settings document action', () => {
     }
     let notify: (() => void) | undefined
     const unsubscribe = vi.fn()
-    const openDocument = vi.fn(async () => ({ result: { ok: true as const } }))
+    const openSettingsDocument = vi.fn(async () => ({ ok: true as const, value: undefined }))
     const controller = new SettingsDocumentController(
-      { settings: { openDocument } },
+      { openSettingsDocument },
       {
         getSnapshot: () => snapshot,
         subscribe: (listener) => {
@@ -39,7 +39,7 @@ describe('Convax settings document action', () => {
     await controller.load()
     expect(controller.getSnapshot()).toEqual({ status: 'ready', opening: false, error: null })
     await controller.open()
-    expect(openDocument).toHaveBeenCalledWith({})
+    expect(openSettingsDocument).toHaveBeenCalledWith()
     expect(controller.getSnapshot()).toEqual({ status: 'ready', opening: false, error: null })
 
     snapshot = { view: { hasDocument: false }, error: null }
@@ -54,7 +54,7 @@ describe('Convax settings document action', () => {
 
   it('keeps localized UI state available after a native-open failure', async () => {
     const controller = new SettingsDocumentController(
-      { settings: { openDocument: async () => ({ result: { ok: false as const, error: { message: 'denied' } } }) } },
+      { openSettingsDocument: async () => ({ ok: false as const, error: { message: 'denied' } }) },
       {
         getSnapshot: () => ({ view: { hasDocument: true }, error: null }),
         subscribe: () => () => undefined,
